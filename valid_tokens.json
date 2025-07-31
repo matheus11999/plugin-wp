@@ -3,7 +3,7 @@
     {
       "token": "demo",
       "domains": [
-        "https://evoapi-wp.ttvjwi.easypanel.host/",
+        "https://evoapi-wp.ttvjwi.easypanel.host",
         "http://localhost",
         "https://demo.linkgate.com",
         "https://test.linkgate.com"

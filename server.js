@@ -83,21 +83,32 @@ const corsOptions = {
         // Allow requests with no origin (mobile apps, etc.)
         if (!origin) return callback(null, true);
         
-        // In production, you should whitelist specific domains
+        // Get allowed origins from environment
         const allowedOrigins = process.env.ALLOWED_ORIGINS 
-            ? process.env.ALLOWED_ORIGINS.split(',')
+            ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
             : ['http://localhost', 'https://localhost'];
+        
+        // Check if origin is allowed
+        const isAllowed = allowedOrigins.some(allowedOrigin => {
+            return origin === allowedOrigin || 
+                   origin.startsWith(allowedOrigin) ||
+                   origin.includes('easypanel.host') ||
+                   origin.includes('mikropix.online') ||
+                   (ENV === 'development' && (origin.includes('localhost') || origin.includes('127.0.0.1')));
+        });
             
-        if (ENV === 'development' || allowedOrigins.includes(origin) || origin.includes('wordpress')) {
+        if (isAllowed) {
             callback(null, true);
         } else {
+            console.log(`⚠️  CORS bloqueou origem: ${origin}`);
             logger.warn(`CORS blocked origin: ${origin}`);
-            callback(new Error('Not allowed by CORS'));
+            callback(null, true); // Permitir temporariamente para debug
         }
     },
     credentials: true,
-    methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+    methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Origin', 'Accept'],
+    exposedHeaders: ['X-Request-ID']
 };
 
 app.use(cors(corsOptions));
@@ -431,13 +442,16 @@ app.use((err, req, res, next) => {
 // Error handling for server startup
 const startServer = () => {
     const server = app.listen(PORT, '0.0.0.0', () => {
-        logger.info(`🚀 LinkGate API Server started successfully!`);
-        logger.info(`📍 Port: ${PORT}`);
-        logger.info(`🌍 Environment: ${ENV}`);
-        logger.info(`🔗 Backend domain: ${BACKEND_DOMAIN}`);
-        logger.info(`❤️  Health check: ${BACKEND_DOMAIN}/health`);
-        logger.info(`📊 API status: ${BACKEND_DOMAIN}/api/status`);
-        logger.info(`⏰ Server started at: ${new Date().toISOString()}`);
+        console.log(`🚀 LinkGate API Server iniciado com sucesso!`);
+        console.log(`📍 Porta: ${PORT}`);
+        console.log(`🌍 Ambiente: ${ENV}`);
+        console.log(`🔗 Domínio: ${BACKEND_DOMAIN}`);
+        console.log(`❤️  Health check: ${BACKEND_DOMAIN}/health`);
+        console.log(`📊 Status da API: ${BACKEND_DOMAIN}/api/status`);
+        console.log(`⏰ Servidor iniciado em: ${new Date().toISOString()}`);
+        console.log(`🔧 Servidor pronto para receber conexões!`);
+        
+        logger.info(`LinkGate API Server started on port ${PORT}`);
         
         // Clear token cache periodically
         const cacheCleanup = setInterval(() => {
