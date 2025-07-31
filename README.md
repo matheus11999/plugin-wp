@@ -55,6 +55,7 @@ Copy `.env.example` to `.env` and configure:
 
 - `NODE_ENV`: Environment (production/development)
 - `PORT`: Server port (default: 3000)
+- `BACKEND_DOMAIN`: Full domain URL where the API is accessible (e.g., https://api.yourdomain.com)
 - `ALLOWED_ORIGINS`: Comma-separated CORS origins
 - `LOG_LEVEL`: Logging level (error/warn/info/debug)
 

@@ -20,6 +20,7 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 const ENV = process.env.NODE_ENV || 'production';
+const BACKEND_DOMAIN = process.env.BACKEND_DOMAIN || `http://localhost:${PORT}`;
 
 // Configure Winston logger
 const logger = winston.createLogger({
@@ -245,11 +246,18 @@ app.get('/api/status', (req, res) => {
         service: 'LinkGate API Server',
         version: '1.0.0',
         status: 'operational',
+        domain: BACKEND_DOMAIN,
         timestamp: new Date().toISOString(),
         endpoints: {
             verify: '/api/verify',
             health: '/health',
             status: '/api/status'
+        },
+        configuration: {
+            environment: ENV,
+            port: PORT,
+            corsEnabled: true,
+            rateLimitEnabled: true
         }
     });
 });
@@ -419,8 +427,9 @@ process.on('SIGINT', () => {
 // Start server
 const server = app.listen(PORT, () => {
     logger.info(`LinkGate API Server started on port ${PORT} in ${ENV} mode`);
-    logger.info(`Health check: http://localhost:${PORT}/health`);
-    logger.info(`API status: http://localhost:${PORT}/api/status`);
+    logger.info(`Backend domain: ${BACKEND_DOMAIN}`);
+    logger.info(`Health check: ${BACKEND_DOMAIN}/health`);
+    logger.info(`API status: ${BACKEND_DOMAIN}/api/status`);
     
     // Clear token cache periodically
     setInterval(() => {
