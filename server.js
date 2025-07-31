@@ -306,8 +306,8 @@ app.get('/api/status', (req, res) => {
 app.post('/api/verify', [
     verifyLimiter,
     body('token')
-        .isLength({ min: 10, max: 200 })
-        .withMessage('Token must be between 10 and 200 characters')
+        .isLength({ min: 1, max: 200 })
+        .withMessage('Token must be between 1 and 200 characters')
         .matches(/^[a-zA-Z0-9\-_\.]+$/)
         .withMessage('Token contains invalid characters'),
     body('domain')
