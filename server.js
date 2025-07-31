@@ -22,16 +22,8 @@ const PORT = process.env.PORT || 3000;
 const ENV = process.env.NODE_ENV || 'production';
 const BACKEND_DOMAIN = process.env.BACKEND_DOMAIN || `http://localhost:${PORT}`;
 
-// Debug: Log initial configuration
-console.log('🔧 Starting LinkGate API Server...');
-console.log('📋 Configuration:');
-console.log(`   - PORT: ${PORT}`);
-console.log(`   - NODE_ENV: ${ENV}`);
-console.log(`   - BACKEND_DOMAIN: ${BACKEND_DOMAIN}`);
-console.log(`   - Process: ${process.pid}`);
-console.log(`   - Node Version: ${process.version}`);
-console.log(`   - Platform: ${process.platform}`);
-console.log('📦 Loading modules...');
+// Initialize Express app configuration
+console.log('🚀 Starting LinkGate API Server...');
 
 // Configure Winston logger
 const logger = winston.createLogger({
@@ -55,8 +47,6 @@ if (ENV === 'development') {
     }));
 }
 
-console.log('✅ Logger configured successfully');
-
 // Handle uncaught exceptions and unhandled promise rejections
 process.on('uncaughtException', (error) => {
     console.error('❌ Uncaught Exception:', error);
@@ -69,9 +59,6 @@ process.on('unhandledRejection', (reason, promise) => {
     logger.error('Unhandled Rejection:', { promise, reason });
     process.exit(1);
 });
-
-console.log('🛡️  Error handlers configured');
-console.log('🔒 Configuring security middleware...');
 
 // Security middleware
 app.use(helmet({
@@ -114,7 +101,6 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-console.log('🌐 CORS configured');
 
 // Rate limiting
 const limiter = rateLimit({
@@ -136,7 +122,6 @@ const limiter = rateLimit({
 });
 
 app.use(limiter);
-console.log('⚡ Rate limiting configured');
 
 // Strict rate limiting for verification endpoint
 const verifyLimiter = rateLimit({
@@ -154,7 +139,6 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Compression middleware
 app.use(compression());
-console.log('📦 Compression configured');
 
 // Logging middleware
 app.use(morgan('combined', {
@@ -179,8 +163,8 @@ app.use((req, res, next) => {
     next();
 });
 
-console.log('🔧 All middleware configured successfully');
-console.log('📊 Initializing cache and routes...');
+// Trust proxy for rate limiting
+app.set('trust proxy', 1);
 
 // Token validation cache (in production, use Redis)
 const tokenCache = new Map();
