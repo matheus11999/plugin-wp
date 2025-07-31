@@ -138,6 +138,14 @@ app.use(morgan('combined', {
 app.use((req, res, next) => {
     req.id = crypto.randomUUID();
     res.setHeader('X-Request-ID', req.id);
+    
+    // Log all incoming requests for debugging
+    console.log(`📥 [${new Date().toISOString()}] ${req.method} ${req.originalUrl} from ${req.ip}`);
+    console.log(`📋 Headers:`, JSON.stringify(req.headers, null, 2));
+    if (req.body && Object.keys(req.body).length > 0) {
+        console.log(`📦 Body:`, JSON.stringify(req.body, null, 2));
+    }
+    
     next();
 });
 
@@ -179,19 +187,25 @@ async function loadValidTokens() {
 // Validate token and domain
 async function validateTokenDomain(token, domain) {
     try {
+        console.log(`🔄 validateTokenDomain called with token: "${token}", domain: "${domain}"`);
+        
         const cacheKey = `${token}:${domain}`;
         
         // Check cache first
         if (tokenCache.has(cacheKey)) {
             const cached = tokenCache.get(cacheKey);
             if (Date.now() < cached.expires) {
+                console.log(`📋 Cache hit for token validation: ${cacheKey}`);
                 logger.debug(`Cache hit for token validation: ${cacheKey}`);
                 return cached.valid;
             }
             tokenCache.delete(cacheKey);
         }
         
+        console.log(`📂 Loading valid tokens from file...`);
         const validTokens = await loadValidTokens();
+        console.log(`📋 Loaded ${validTokens.tokens.length} tokens`);
+        
         let isValid = false;
         
         // Normalize domain (remove protocol, www, trailing slash)
@@ -201,8 +215,15 @@ async function validateTokenDomain(token, domain) {
             .replace(/\/$/, '')
             .toLowerCase();
         
+        console.log(`🔧 Normalized domain: "${normalizedDomain}"`);
+        
         for (const tokenObj of validTokens.tokens) {
+            console.log(`🔍 Checking token: "${tokenObj.token}" against provided: "${token}"`);
+            
             if (tokenObj.token === token) {
+                console.log(`✅ Token match found! Checking domains...`);
+                console.log(`📋 Allowed domains:`, tokenObj.domains);
+                
                 // Check if domain is in allowed domains
                 for (const allowedDomain of tokenObj.domains) {
                     const normalizedAllowed = allowedDomain
@@ -211,7 +232,10 @@ async function validateTokenDomain(token, domain) {
                         .replace(/\/$/, '')
                         .toLowerCase();
                     
+                    console.log(`🔍 Comparing "${normalizedDomain}" with "${normalizedAllowed}"`);
+                    
                     if (normalizedDomain === normalizedAllowed) {
+                        console.log(`✅ Domain match found!`);
                         isValid = true;
                         break;
                     }
@@ -226,10 +250,12 @@ async function validateTokenDomain(token, domain) {
             expires: Date.now() + CACHE_TTL
         });
         
+        console.log(`🏁 Final validation result: ${isValid} for ${normalizedDomain}`);
         logger.info(`Token validation result: ${isValid} for ${normalizedDomain}`);
         return isValid;
         
     } catch (error) {
+        console.log(`💥 Token validation error:`, error);
         logger.error('Token validation error:', error);
         return false;
     }
@@ -237,13 +263,21 @@ async function validateTokenDomain(token, domain) {
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-    res.json({
+    console.log(`❤️  Health check request from ${req.ip}`);
+    
+    const healthData = {
         status: 'healthy',
+        service: 'LinkGate API Server',
         timestamp: new Date().toISOString(),
         uptime: process.uptime(),
         version: '1.0.0',
-        environment: ENV
-    });
+        environment: ENV,
+        port: PORT,
+        requestId: req.id
+    };
+    
+    console.log(`✅ Health check response:`, healthData);
+    res.json(healthData);
 });
 
 // API status endpoint
@@ -284,10 +318,14 @@ app.post('/api/verify', [
 ], async (req, res) => {
     const requestId = req.id;
     
+    console.log(`🔐 Token verification request ${requestId} started`);
+    console.log(`📦 Request body:`, req.body);
+    
     try {
         // Check validation errors
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
+            console.log(`❌ Validation errors for request ${requestId}:`, errors.array());
             logger.warn(`Validation errors for request ${requestId}:`, errors.array());
             return res.status(400).json({
                 valid: false,
@@ -299,10 +337,12 @@ app.post('/api/verify', [
         
         const { token, domain } = req.body;
         
+        console.log(`🔍 Verifying token "${token}" for domain "${domain}" [${requestId}]`);
         logger.info(`Token verification request ${requestId}: ${domain}`);
         
         // Additional security checks
         if (token.includes(' ') || domain.includes(' ')) {
+            console.log(`⚠️  Suspicious request ${requestId}: contains spaces`);
             logger.warn(`Suspicious request ${requestId}: contains spaces`);
             return res.status(400).json({
                 valid: false,
@@ -312,28 +352,43 @@ app.post('/api/verify', [
         }
         
         // Validate token and domain
+        console.log(`🔄 Starting token validation...`);
         const isValid = await validateTokenDomain(token, domain);
+        console.log(`🔍 Token validation result: ${isValid}`);
         
         const response = {
             valid: isValid,
             timestamp: new Date().toISOString(),
-            requestId
+            requestId,
+            debug: {
+                receivedToken: token,
+                receivedDomain: domain,
+                validationResult: isValid
+            }
         };
         
         if (isValid) {
+            console.log(`✅ Token verification successful for ${domain} [${requestId}]`);
             logger.info(`Token verification successful for ${domain} [${requestId}]`);
         } else {
+            console.log(`❌ Token verification failed for ${domain} [${requestId}]`);
             logger.warn(`Token verification failed for ${domain} [${requestId}]`);
         }
         
+        console.log(`📤 Sending response:`, response);
         res.json(response);
         
     } catch (error) {
+        console.log(`💥 Token verification error for request ${requestId}:`, error);
         logger.error(`Token verification error for request ${requestId}:`, error);
         res.status(500).json({
             valid: false,
             error: 'Internal server error',
-            requestId
+            requestId,
+            debug: {
+                errorMessage: error.message,
+                errorStack: error.stack
+            }
         });
     }
 });
