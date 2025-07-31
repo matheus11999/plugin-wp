@@ -77,38 +77,14 @@ app.use(helmet({
     }
 }));
 
-// CORS configuration
+// CORS configuration - Allow everything for now
 const corsOptions = {
-    origin: function (origin, callback) {
-        // Allow requests with no origin (mobile apps, etc.)
-        if (!origin) return callback(null, true);
-        
-        // Get allowed origins from environment
-        const allowedOrigins = process.env.ALLOWED_ORIGINS 
-            ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
-            : ['http://localhost', 'https://localhost'];
-        
-        // Check if origin is allowed
-        const isAllowed = allowedOrigins.some(allowedOrigin => {
-            return origin === allowedOrigin || 
-                   origin.startsWith(allowedOrigin) ||
-                   origin.includes('easypanel.host') ||
-                   origin.includes('mikropix.online') ||
-                   (ENV === 'development' && (origin.includes('localhost') || origin.includes('127.0.0.1')));
-        });
-            
-        if (isAllowed) {
-            callback(null, true);
-        } else {
-            console.log(`⚠️  CORS bloqueou origem: ${origin}`);
-            logger.warn(`CORS blocked origin: ${origin}`);
-            callback(null, true); // Permitir temporariamente para debug
-        }
-    },
+    origin: true, // Allow all origins
     credentials: true,
-    methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Origin', 'Accept'],
-    exposedHeaders: ['X-Request-ID']
+    methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE', 'PATCH'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Origin', 'Accept', 'X-Request-ID'],
+    exposedHeaders: ['X-Request-ID'],
+    optionsSuccessStatus: 200 // Some legacy browsers (IE11, various SmartTVs) choke on 204
 };
 
 app.use(cors(corsOptions));
