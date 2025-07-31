@@ -1,0 +1,43 @@
+{
+  "tokens": [
+    {
+      "token": "demo_token_123456789",
+      "domains": [
+        "https://localhost",
+        "http://localhost",
+        "https://demo.linkgate.com",
+        "https://test.linkgate.com"
+      ],
+      "created": "2024-01-01T00:00:00Z",
+      "expires": "2025-12-31T23:59:59Z",
+      "description": "Demo token for testing and development"
+    },
+    {
+      "token": "prod_token_987654321",
+      "domains": [
+        "https://example.com",
+        "https://www.example.com",
+        "https://mywordpresssite.com"
+      ],
+      "created": "2024-01-01T00:00:00Z",
+      "expires": "2025-12-31T23:59:59Z",
+      "description": "Production token for example.com"
+    },
+    {
+      "token": "client_token_abcdef123",
+      "domains": [
+        "https://client-website.com",
+        "https://www.client-website.com"
+      ],
+      "created": "2024-01-01T00:00:00Z",
+      "expires": "2025-06-30T23:59:59Z",
+      "description": "Client token with limited validity"
+    }
+  ],
+  "metadata": {
+    "version": "1.0",
+    "lastUpdated": "2024-01-01T00:00:00Z",
+    "totalTokens": 3,
+    "description": "LinkGate token validation database"
+  }
+}
