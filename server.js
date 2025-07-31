@@ -22,6 +22,17 @@ const PORT = process.env.PORT || 3000;
 const ENV = process.env.NODE_ENV || 'production';
 const BACKEND_DOMAIN = process.env.BACKEND_DOMAIN || `http://localhost:${PORT}`;
 
+// Debug: Log initial configuration
+console.log('🔧 Starting LinkGate API Server...');
+console.log('📋 Configuration:');
+console.log(`   - PORT: ${PORT}`);
+console.log(`   - NODE_ENV: ${ENV}`);
+console.log(`   - BACKEND_DOMAIN: ${BACKEND_DOMAIN}`);
+console.log(`   - Process: ${process.pid}`);
+console.log(`   - Node Version: ${process.version}`);
+console.log(`   - Platform: ${process.platform}`);
+console.log('📦 Loading modules...');
+
 // Configure Winston logger
 const logger = winston.createLogger({
     level: ENV === 'development' ? 'debug' : 'info',
@@ -43,6 +54,24 @@ if (ENV === 'development') {
         format: winston.format.simple()
     }));
 }
+
+console.log('✅ Logger configured successfully');
+
+// Handle uncaught exceptions and unhandled promise rejections
+process.on('uncaughtException', (error) => {
+    console.error('❌ Uncaught Exception:', error);
+    logger.error('Uncaught Exception:', error);
+    process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+    logger.error('Unhandled Rejection:', { promise, reason });
+    process.exit(1);
+});
+
+console.log('🛡️  Error handlers configured');
+console.log('🔒 Configuring security middleware...');
 
 // Security middleware
 app.use(helmet({
@@ -85,6 +114,7 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
+console.log('🌐 CORS configured');
 
 // Rate limiting
 const limiter = rateLimit({
@@ -106,6 +136,7 @@ const limiter = rateLimit({
 });
 
 app.use(limiter);
+console.log('⚡ Rate limiting configured');
 
 // Strict rate limiting for verification endpoint
 const verifyLimiter = rateLimit({
@@ -123,6 +154,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Compression middleware
 app.use(compression());
+console.log('📦 Compression configured');
 
 // Logging middleware
 app.use(morgan('combined', {
@@ -146,6 +178,9 @@ app.use((req, res, next) => {
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     next();
 });
+
+console.log('🔧 All middleware configured successfully');
+console.log('📊 Initializing cache and routes...');
 
 // Token validation cache (in production, use Redis)
 const tokenCache = new Map();
@@ -407,39 +442,72 @@ app.use((err, req, res, next) => {
     });
 });
 
-// Graceful shutdown
-process.on('SIGTERM', () => {
-    logger.info('SIGTERM received, shutting down gracefully');
-    server.close(() => {
-        logger.info('Process terminated');
-        process.exit(0);
-    });
-});
+// Graceful shutdown handlers are now inside startServer() function
 
-process.on('SIGINT', () => {
-    logger.info('SIGINT received, shutting down gracefully');
-    server.close(() => {
-        logger.info('Process terminated');
-        process.exit(0);
-    });
-});
-
-// Start server
-const server = app.listen(PORT, () => {
-    logger.info(`LinkGate API Server started on port ${PORT} in ${ENV} mode`);
-    logger.info(`Backend domain: ${BACKEND_DOMAIN}`);
-    logger.info(`Health check: ${BACKEND_DOMAIN}/health`);
-    logger.info(`API status: ${BACKEND_DOMAIN}/api/status`);
-    
-    // Clear token cache periodically
-    setInterval(() => {
-        const now = Date.now();
-        for (const [key, value] of tokenCache.entries()) {
-            if (now >= value.expires) {
-                tokenCache.delete(key);
+// Error handling for server startup
+const startServer = () => {
+    const server = app.listen(PORT, '0.0.0.0', () => {
+        logger.info(`🚀 LinkGate API Server started successfully!`);
+        logger.info(`📍 Port: ${PORT}`);
+        logger.info(`🌍 Environment: ${ENV}`);
+        logger.info(`🔗 Backend domain: ${BACKEND_DOMAIN}`);
+        logger.info(`❤️  Health check: ${BACKEND_DOMAIN}/health`);
+        logger.info(`📊 API status: ${BACKEND_DOMAIN}/api/status`);
+        logger.info(`⏰ Server started at: ${new Date().toISOString()}`);
+        
+        // Clear token cache periodically
+        const cacheCleanup = setInterval(() => {
+            const now = Date.now();
+            let cleanedCount = 0;
+            for (const [key, value] of tokenCache.entries()) {
+                if (now >= value.expires) {
+                    tokenCache.delete(key);
+                    cleanedCount++;
+                }
             }
+            if (cleanedCount > 0) {
+                logger.debug(`Cleaned ${cleanedCount} expired cache entries`);
+            }
+        }, 60000); // Clean every minute
+        
+        // Graceful shutdown handler
+        const gracefulShutdown = (signal) => {
+            logger.info(`${signal} received, shutting down gracefully`);
+            clearInterval(cacheCleanup);
+            server.close(() => {
+                logger.info('✅ Server closed successfully');
+                process.exit(0);
+            });
+            
+            // Force close after 10 seconds
+            setTimeout(() => {
+                logger.error('❌ Could not close connections in time, forcefully shutting down');
+                process.exit(1);
+            }, 10000);
+        };
+        
+        process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+        process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+    });
+    
+    server.on('error', (error) => {
+        if (error.code === 'EADDRINUSE') {
+            logger.error(`❌ Port ${PORT} is already in use. Please check if another process is running on this port.`);
+            logger.error(`💡 Try: lsof -ti:${PORT} | xargs kill -9`);
+        } else if (error.code === 'EACCES') {
+            logger.error(`❌ Permission denied. Cannot bind to port ${PORT}. Try using a port number > 1024 or run with sudo.`);
+        } else if (error.code === 'ENOTFOUND') {
+            logger.error(`❌ Address not found. Check your network configuration.`);
+        } else {
+            logger.error(`❌ Server startup error:`, error);
         }
-    }, 60000); // Clean every minute
-});
+        process.exit(1);
+    });
+    
+    return server;
+};
+
+// Start the server
+const server = startServer();
 
 module.exports = app;

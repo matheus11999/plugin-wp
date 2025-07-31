@@ -1,15 +1,15 @@
 {
   "tokens": [
     {
-      "token": "demo_token_123456789",
+      "token": "demo",
       "domains": [
-        "https://localhost",
+        "https://evoapi-wp.ttvjwi.easypanel.host/",
         "http://localhost",
         "https://demo.linkgate.com",
         "https://test.linkgate.com"
       ],
       "created": "2024-01-01T00:00:00Z",
-      "expires": "2025-12-31T23:59:59Z",
+      "expires": "2026-12-31T23:59:59Z",
       "description": "Demo token for testing and development"
     },
     {
