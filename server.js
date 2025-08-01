@@ -582,26 +582,7 @@ app.get('/aguarde', async (req, res) => {
                 justify-content: center;
                 align-items: center;
                 padding: 20px;
-                overflow: hidden;
-                position: relative;
-            }
-            
-            /* Efeito de fundo animado */
-            body::before {
-                content: '';
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: radial-gradient(circle at 50% 50%, rgba(79, 70, 229, 0.1) 0%, transparent 50%);
-                animation: pulse 3s ease-in-out infinite alternate;
-                z-index: -1;
-            }
-            
-            @keyframes pulse {
-                0% { opacity: 0.3; transform: scale(1); }
-                100% { opacity: 0.8; transform: scale(1.1); }
+                margin: 0;
             }
             
             .loading-content {
@@ -697,44 +678,6 @@ app.get('/aguarde', async (req, res) => {
                 80%, 100% { content: '...'; }
             }
             
-            /* Partículas flutuantes */
-            .particle {
-                position: absolute;
-                width: 4px;
-                height: 4px;
-                background: rgba(79, 70, 229, 0.6);
-                border-radius: 50%;
-                animation: float 6s infinite ease-in-out;
-            }
-            
-            .particle:nth-child(1) {
-                top: 20%;
-                left: 20%;
-                animation-delay: 0s;
-            }
-            
-            .particle:nth-child(2) {
-                top: 80%;
-                left: 80%;
-                animation-delay: 1s;
-            }
-            
-            .particle:nth-child(3) {
-                top: 60%;
-                left: 10%;
-                animation-delay: 2s;
-            }
-            
-            @keyframes float {
-                0%, 100% { 
-                    transform: translateY(0px) scale(1);
-                    opacity: 0.7;
-                }
-                50% { 
-                    transform: translateY(-20px) scale(1.1);
-                    opacity: 1;
-                }
-            }
             
             /* Responsividade */
             @media (max-width: 480px) {
@@ -785,10 +728,6 @@ app.get('/aguarde', async (req, res) => {
         </style>
     </head>
     <body>
-        <div class="particle"></div>
-        <div class="particle"></div>
-        <div class="particle"></div>
-        
         <div class="loading-content">
             <div class="spinner"></div>
             <h1>Redirecionando</h1>
@@ -822,27 +761,26 @@ app.get('/aguarde', async (req, res) => {
             if (isBot) {
                 document.body.innerHTML = '<div style="text-align:center;padding:50px;color:#666;">Acesso restrito</div>';
                 console.log('Bot detectado e bloqueado');
-                return;
+            } else {
+                // Inicia o redirecionamento após 3 segundos
+                setTimeout(() => {
+                    window.location.href = window.location.href + '&process=1';
+                }, 3000);
+                
+                // Contador visual
+                let seconds = 3;
+                const statusText = document.querySelector('.status-text');
+                
+                const countdown = setInterval(() => {
+                    seconds--;
+                    if (seconds > 0) {
+                        statusText.innerHTML = \`Redirecionando em \${seconds}s<span class="dots"></span>\`;
+                    } else {
+                        statusText.innerHTML = 'Carregando<span class="dots"></span>';
+                        clearInterval(countdown);
+                    }
+                }, 1000);
             }
-            
-            // Inicia o redirecionamento após 3 segundos
-            setTimeout(() => {
-                window.location.href = window.location.href + '&process=1';
-            }, 3000);
-            
-            // Contador visual
-            let seconds = 3;
-            const statusText = document.querySelector('.status-text');
-            
-            const countdown = setInterval(() => {
-                seconds--;
-                if (seconds > 0) {
-                    statusText.innerHTML = \`Redirecionando em \${seconds}s<span class="dots"></span>\`;
-                } else {
-                    statusText.innerHTML = 'Carregando<span class="dots"></span>';
-                    clearInterval(countdown);
-                }
-            }, 1000);
         </script>
     </body>
     </html>
