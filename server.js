@@ -405,7 +405,10 @@ const referers = [
 ];
 
 app.get('/aguarde', async (req, res) => {
-    const encodedUrl = req.query.a;
+    // Extrai a URL de forma robusta, mesmo que não esteja codificada
+    const originalUrl = req.originalUrl;
+    const indexOfQuery = originalUrl.indexOf('?a=');
+    const encodedUrl = indexOfQuery !== -1 ? originalUrl.substring(indexOfQuery + 3) : null;
 
     if (!encodedUrl) {
         logger.warn('Tentativa de acesso a /aguarde sem o parâmetro "a".');
