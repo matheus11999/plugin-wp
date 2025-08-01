@@ -401,16 +401,13 @@ app.post('/api/verify', [
 const CONFIG = {
     // Domínios ativos para redirecionamento
     ACTIVE_DOMAINS: [
-        'https://evoapi-wp.ttvjwi.easypanel.host',
-        'https://wp.mikropix.online',
-        'https://demo.linkgate.com'
-    ],
+        'https://evoapi-wp.ttvjwi.easypanel.host'    ],
     
     // Se deve fazer redirecionamento após proxy (true/false)
     REDIRECT_AFTER_PROXY: true,
     
     // Delay antes do redirecionamento (em ms)
-    REDIRECT_DELAY: 5000
+    REDIRECT_DELAY: 3000
 };
 
 // Lista de referrers para spoofing aleatório (top 5 geradores de tráfego)
