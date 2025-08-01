@@ -14,6 +14,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const crypto = require('crypto');
 const winston = require('winston');
+const axios = require('axios');
 require('dotenv').config();
 
 // Initialize Express app
@@ -393,15 +394,6 @@ app.post('/api/verify', [
     }
 });
 
-
-const referers = [
-    'https://www.google.com', 
-    'https://www.facebook.com', 
-    'https://www.bing.com', 
-    'https://www.yahoo.com'
-];
-
-const axios = require('axios');
 
 const referers = [
     'https://www.google.com/',
