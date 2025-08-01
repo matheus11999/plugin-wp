@@ -6,6 +6,7 @@
 console.log('🚀 LinkGate Service Worker iniciado');
 
 let spoofedReferer = null;
+let targetUrl = null;
 let targetHostname = null;
 
 // Escuta mensagens da página principal
@@ -14,9 +15,11 @@ self.addEventListener('message', function(event) {
     
     if (event.data.action === 'setSpoofConfig') {
         spoofedReferer = event.data.referer;
+        targetUrl = event.data.targetUrl;
         targetHostname = event.data.hostname;
         console.log('🎯 Configuração de spoofing definida:', {
             referer: spoofedReferer,
+            targetUrl: targetUrl,
             hostname: targetHostname
         });
         
@@ -24,59 +27,106 @@ self.addEventListener('message', function(event) {
         if (event.ports && event.ports[0]) {
             event.ports[0].postMessage({ success: true });
         }
+    } else if (event.data.action === 'fetchWithSpoof') {
+        // Faz requisição com referer spoofado e retorna o conteúdo
+        console.log('🎯 Fazendo requisição spoofada para:', event.data.url);
+        
+        const channel = new MessageChannel();
+        
+        fetch(event.data.url, {
+            headers: {
+                'Referer': spoofedReferer,
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            },
+            mode: 'cors',
+            credentials: 'omit'
+        })
+        .then(response => {
+            console.log('✅ Requisição spoofada bem-sucedida:', response.status);
+            return response.text();
+        })
+        .then(html => {
+            console.log('📄 Conteúdo recebido, tamanho:', html.length);
+            if (event.ports && event.ports[0]) {
+                event.ports[0].postMessage({ 
+                    success: true, 
+                    html: html,
+                    spoofedReferer: spoofedReferer
+                });
+            }
+        })
+        .catch(error => {
+            console.error('❌ Erro na requisição spoofada:', error);
+            if (event.ports && event.ports[0]) {
+                event.ports[0].postMessage({ 
+                    success: false, 
+                    error: error.message 
+                });
+            }
+        });
     }
 });
 
-// Intercepta todas as requisições de navegação
+// Intercepta TODAS as requisições para qualquer domínio
 self.addEventListener('fetch', function(event) {
     const request = event.request;
     const url = new URL(request.url);
     
-    // Log de debug para todas as requisições
-    console.log('🔍 SW interceptou requisição:', {
-        url: request.url,
-        method: request.method,
-        mode: request.mode,
-        destination: request.destination
-    });
+    // Só loga requisições importantes para não poluir o console
+    if (request.mode === 'navigate' || (targetHostname && url.hostname === targetHostname)) {
+        console.log('🔍 SW interceptou:', {
+            url: request.url,
+            method: request.method,
+            mode: request.mode,
+            destination: request.destination,
+            referer: request.headers.get('referer')
+        });
+    }
     
-    // Verifica se é uma requisição de navegação para o destino alvo
-    if (targetHostname && url.hostname === targetHostname && request.mode === 'navigate') {
-        console.log('🎯 Interceptando navegação para destino alvo:', url.hostname);
+    // Intercepta requisições para o destino alvo
+    if (targetHostname && url.hostname === targetHostname) {
+        console.log('🎯 Interceptando requisição para destino alvo:', url.hostname);
         
-        // Cria uma nova requisição com referer spoofado
-        const modifiedHeaders = new Headers(request.headers);
+        // Clona headers e adiciona referer spoofado
+        const newHeaders = new Headers();
         
+        // Copia headers existentes
+        for (const [key, value] of request.headers.entries()) {
+            if (key.toLowerCase() !== 'referer' && key.toLowerCase() !== 'referrer') {
+                newHeaders.set(key, value);
+            }
+        }
+        
+        // Adiciona referer spoofado
         if (spoofedReferer) {
-            modifiedHeaders.set('Referer', spoofedReferer);
-            modifiedHeaders.set('Referrer', spoofedReferer);
+            newHeaders.set('Referer', spoofedReferer);
             console.log('🎭 Referer spoofado aplicado:', spoofedReferer);
         }
         
-        const modifiedRequest = new Request(request, {
-            headers: modifiedHeaders
+        // Cria nova requisição
+        const modifiedRequest = new Request(request.url, {
+            method: request.method,
+            headers: newHeaders,
+            body: request.body,
+            mode: request.mode === 'navigate' ? 'cors' : request.mode,
+            credentials: 'omit',
+            cache: request.cache,
+            redirect: request.redirect
         });
         
         // Responde com a requisição modificada
         event.respondWith(
             fetch(modifiedRequest)
                 .then(response => {
-                    console.log('✅ Requisição spoofada enviada com sucesso');
+                    console.log('✅ Requisição spoofada enviada:', response.status);
                     return response;
                 })
                 .catch(error => {
                     console.error('❌ Erro na requisição spoofada:', error);
-                    // Fallback para requisição original
+                    // Fallback para requisição original sem spoofing
                     return fetch(request);
                 })
         );
-    }
-    // Para outras requisições, deixa passar normalmente
-    else {
-        // Só intercepta se for para o domínio alvo
-        if (targetHostname && url.hostname === targetHostname) {
-            console.log('🔄 Passando requisição para o destino sem modificação');
-        }
     }
 });
 
@@ -94,9 +144,10 @@ self.addEventListener('activate', function(event) {
     event.waitUntil(self.clients.claim());
 });
 
-// Cleanup quando não precisar mais
+// Cleanup
 self.addEventListener('beforeunload', function(event) {
-    console.log('🧹 Service Worker sendo limpo');
+    console.log('🧹 Service Worker cleanup');
     spoofedReferer = null;
+    targetUrl = null;
     targetHostname = null;
 });

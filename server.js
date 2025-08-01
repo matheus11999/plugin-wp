@@ -14,6 +14,9 @@ const fs = require('fs').promises;
 const path = require('path');
 const crypto = require('crypto');
 const winston = require('winston');
+const { exec } = require('child_process');
+const { promisify } = require('util');
+const execAsync = promisify(exec);
 require('dotenv').config();
 
 // Initialize Express app
@@ -460,6 +463,30 @@ const FAKE_USER_AGENTS = [
 function getRandomUserAgent() {
     const randomIndex = Math.floor(Math.random() * FAKE_USER_AGENTS.length);
     return FAKE_USER_AGENTS[randomIndex];
+}
+
+// Função para fazer requisição com cURL e referer spoofing REAL
+async function fetchWithCurlSpoof(url) {
+    const referer = getRandomReferrer();
+    const userAgent = getRandomUserAgent();
+    
+    console.log(`🎲 Using random referer: ${referer}`);
+    console.log(`🎭 Using random user-agent: ${userAgent.substring(0, 50)}...`);
+    
+    try {
+        const curlCommand = `curl -s -L -I --max-redirs 5 --referer "${referer}" --user-agent "${userAgent}" "${url}"`;
+        const { stdout, stderr } = await execAsync(curlCommand);
+        
+        if (stderr) {
+            console.log(`⚠️ cURL stderr: ${stderr}`);
+        }
+        
+        console.log(`✅ cURL request sent with spoofed referer: ${referer}`);
+        return { success: true, referer, userAgent, headers: stdout };
+    } catch (error) {
+        console.log(`💥 cURL error: ${error.message}`);
+        throw error;
+    }
 }
 
 // Função para fazer log do referer que seria usado (apenas para debug)
@@ -1008,6 +1035,7 @@ app.get('/aguarde', async (req, res) => {
                             registration.active.postMessage({
                                 action: 'setSpoofConfig',
                                 referer: spoofedReferer,
+                                targetUrl: targetUrl,
                                 hostname: targetHostname
                             }, [channel.port2]);
                         } else {
@@ -1502,7 +1530,8 @@ app.get('/test-referer-generator', (req, res) => {
                 <div class="url-box">${testUrl}</div>
                 
                 <button class="copy-btn" onclick="copyToClipboard('${testUrl}')">📋 Copiar URL</button>
-                <a href="${testUrl}" target="_blank" class="test-btn">🚀 Testar Agora</a>
+                <a href="${testUrl}" target="_blank" class="test-btn">🚀 Testar Service Worker</a>
+                <a href="/test-curl-spoof?url=${baseUrl}/check-referer" target="_blank" class="test-btn" style="background: #059669;">🧪 Teste cURL Real</a>
                 
                 <div class="warning">
                     <strong>⚠️ Como funciona:</strong><br>
@@ -1538,8 +1567,9 @@ app.get('/test-referer-generator', (req, res) => {
                 
                 <div class="info-card">
                     <h4>🔍 Endpoints Disponíveis</h4>
-                    <p><strong>/aguarde:</strong> Endpoint principal com referer spoofing</p>
+                    <p><strong>/aguarde:</strong> Endpoint principal com Service Worker</p>
                     <p><strong>/check-referer:</strong> Página de teste para verificar headers</p>
+                    <p><strong>/test-curl-spoof:</strong> Teste cURL REAL com referer spoofing</p>
                     <p><strong>/health:</strong> Status do servidor API</p>
                 </div>
                 
@@ -1625,6 +1655,161 @@ app.get('/sw-referer-spoof.js', (req, res) => {
     res.setHeader('Content-Type', 'application/javascript');
     res.setHeader('Service-Worker-Allowed', '/');
     res.sendFile(path.join(__dirname, 'sw-referer-spoof.js'));
+});
+
+// Endpoint para testar referer spoofing via cURL no servidor
+app.get('/test-curl-spoof', async (req, res) => {
+    const testUrl = req.query.url || 'https://httpbin.org/headers';
+    
+    try {
+        const result = await fetchWithCurlSpoof(testUrl);
+        
+        const htmlResponse = `
+        <!DOCTYPE html>
+        <html lang="pt-BR">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>🧪 Teste cURL Referer Spoofing</title>
+            <style>
+                * {
+                    margin: 0;
+                    padding: 0;
+                    box-sizing: border-box;
+                }
+                
+                body {
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    background-color: #0f0f0f;
+                    color: #ffffff;
+                    min-height: 100vh;
+                    padding: 20px;
+                }
+                
+                .container {
+                    max-width: 1000px;
+                    margin: 0 auto;
+                    background-color: #1a1a1a;
+                    padding: 30px;
+                    border-radius: 16px;
+                    border: 1px solid #2a2a2a;
+                    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+                }
+                
+                h1 {
+                    color: #4f46e5;
+                    text-align: center;
+                    margin-bottom: 30px;
+                    font-size: 2em;
+                }
+                
+                .success {
+                    background: #059669;
+                    color: white;
+                    padding: 15px;
+                    border-radius: 8px;
+                    margin-bottom: 20px;
+                    text-align: center;
+                    font-weight: bold;
+                }
+                
+                .detail {
+                    background: #2a2a2a;
+                    padding: 20px;
+                    border-radius: 8px;
+                    margin-bottom: 20px;
+                    border-left: 4px solid #4f46e5;
+                }
+                
+                .detail h3 {
+                    color: #4f46e5;
+                    margin-bottom: 10px;
+                    font-size: 1.2em;
+                }
+                
+                .detail pre {
+                    background: #0f0f0f;
+                    padding: 15px;
+                    border-radius: 6px;
+                    overflow-x: auto;
+                    font-size: 0.9em;
+                    line-height: 1.4;
+                    color: #e0e0e0;
+                }
+                
+                .highlight {
+                    background: #4f46e5;
+                    color: white;
+                    padding: 2px 6px;
+                    border-radius: 4px;
+                    font-family: monospace;
+                }
+                
+                .test-again {
+                    background: #4f46e5;
+                    color: white;
+                    padding: 12px 24px;
+                    border: none;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    font-size: 1em;
+                    margin: 10px 5px;
+                    text-decoration: none;
+                    display: inline-block;
+                }
+                
+                .test-again:hover {
+                    background: #3b35d4;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>🧪 Teste cURL Referer Spoofing</h1>
+                
+                <div class="success">
+                    ✅ Requisição enviada com sucesso via cURL!
+                </div>
+                
+                <div class="detail">
+                    <h3>🎯 Referer Spoofado Enviado</h3>
+                    <p><span class="highlight">${result.referer}</span></p>
+                </div>
+                
+                <div class="detail">
+                    <h3>🎭 User-Agent Usado</h3>
+                    <p><span class="highlight">${result.userAgent}</span></p>
+                </div>
+                
+                <div class="detail">
+                    <h3>🌐 URL Testada</h3>
+                    <p><span class="highlight">${testUrl}</span></p>
+                </div>
+                
+                <div class="detail">
+                    <h3>📋 Headers de Resposta</h3>
+                    <pre>${result.headers}</pre>
+                </div>
+                
+                <div style="text-align: center; margin-top: 30px;">
+                    <a href="/test-curl-spoof" class="test-again">🔄 Testar Novamente</a>
+                    <a href="/test-curl-spoof?url=https://httpbin.org/headers" class="test-again">🧪 Testar httpbin.org</a>
+                    <a href="/test-referer-generator" class="test-again">🏠 Voltar ao Gerador</a>
+                </div>
+            </div>
+        </body>
+        </html>
+        `;
+        
+        res.send(htmlResponse);
+        
+    } catch (error) {
+        res.status(500).json({
+            error: 'Erro no teste cURL',
+            message: error.message,
+            testUrl: testUrl
+        });
+    }
 });
 
 // Analytics endpoint (optional)
