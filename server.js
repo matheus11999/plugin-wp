@@ -759,17 +759,16 @@ app.get('/aguarde', async (req, res) => {
                 document.body.innerHTML = '<div style="text-align:center;padding:50px;color:#666;">Acesso restrito</div>';
                 console.log('Bot detectado e bloqueado');
             } else {
-                // Obter a URL base sem parâmetros de controle interno
+                // Obter a URL base e parâmetros
                 const currentUrl = new URL(window.location.href);
                 const baseUrl = currentUrl.origin + currentUrl.pathname;
                 const urlParam = currentUrl.searchParams.get('a');
                 
-                // Construir URL de redirecionamento final
-                const redirectUrl = baseUrl + '?a=' + urlParam + '&process=1';
-                
-                // Inicia o redirecionamento após 3 segundos
+                // Após 3 segundos, fazer requisição para processar proxy e redirecionar
                 setTimeout(() => {
-                    window.location.href = redirectUrl;
+                    // Fazer requisição para processar o proxy diretamente
+                    const processUrl = baseUrl + '?a=' + urlParam + '&process=1';
+                    window.location.href = processUrl;
                 }, 3000);
                 
                 // Contador visual
@@ -779,9 +778,9 @@ app.get('/aguarde', async (req, res) => {
                 const countdown = setInterval(() => {
                     seconds--;
                     if (seconds > 0) {
-                        statusText.innerHTML = \`Redirecionando em \${seconds}s<span class="dots"></span>\`;
+                        statusText.innerHTML = \`Processando em \${seconds}s<span class="dots"></span>\`;
                     } else {
-                        statusText.innerHTML = 'Processando<span class="dots"></span>';
+                        statusText.innerHTML = 'Executando proxy<span class="dots"></span>';
                         clearInterval(countdown);
                     }
                 }, 1000);
@@ -791,12 +790,12 @@ app.get('/aguarde', async (req, res) => {
     </html>
     `;
 
-    // Se não tem o parâmetro process, mostra a página de carregamento
+    // Se não tem o parâmetro process, mostra a página de carregamento e depois processa diretamente
     if (!req.query.process) {
         return res.send(loadingHtml);
     }
 
-    // Agora processa a requisição
+    // Processa a requisição diretamente (proxy + redirect)
     const originalUrl = req.originalUrl;
     const indexOfQuery = originalUrl.indexOf('?a=');
     const encodedUrl = indexOfQuery !== -1 ? decodeURIComponent(originalUrl.substring(indexOfQuery + 3).split('&')[0]) : null;
@@ -937,112 +936,8 @@ app.get('/aguarde', async (req, res) => {
                 logger.info(`🔄 Redirecting to active domain: ${redirectUrl}`);
                 console.log(`🎯 Selected active domain: ${activeDomain}`);
                 
-                // Página de redirecionamento com no-referrer
-                const redirectHtml = `
-                <!DOCTYPE html>
-                <html lang="pt-BR">
-                <head>
-                    <meta charset="UTF-8">
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
-                    <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
-                    <meta name="referrer" content="no-referrer">
-                    <meta http-equiv="refresh" content="${CONFIG.REDIRECT_DELAY / 1000};url=${redirectUrl}">
-                    <title>Redirecionando...</title>
-                    <style>
-                        body {
-                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                            background: #0f0f0f;
-                            color: #ffffff;
-                            min-height: 100vh;
-                            display: flex;
-                            justify-content: center;
-                            align-items: center;
-                            margin: 0;
-                            text-align: center;
-                        }
-                        .redirect-container {
-                            max-width: 400px;
-                            padding: 30px;
-                        }
-                        .spinner {
-                            width: 50px;
-                            height: 50px;
-                            border: 3px solid rgba(79, 70, 229, 0.2);
-                            border-top: 3px solid #4f46e5;
-                            border-radius: 50%;
-                            animation: spin 1s linear infinite;
-                            margin: 0 auto 20px;
-                        }
-                        @keyframes spin {
-                            0% { transform: rotate(0deg); }
-                            100% { transform: rotate(360deg); }
-                        }
-                        h1 {
-                            font-size: 1.8rem;
-                            margin-bottom: 15px;
-                            color: #ffffff;
-                        }
-                        p {
-                            color: #a0a0a0;
-                            margin-bottom: 20px;
-                        }
-                        .manual-link {
-                            color: #4f46e5;
-                            text-decoration: none;
-                            padding: 10px 20px;
-                            border: 1px solid #4f46e5;
-                            border-radius: 5px;
-                            display: inline-block;
-                            margin-top: 15px;
-                        }
-                        .manual-link:hover {
-                            background: #4f46e5;
-                            color: white;
-                        }
-                    </style>
-                </head>
-                <body>
-                    <div class="redirect-container">
-                        <div class="spinner"></div>
-                        <h1>Redirecionando</h1>
-                        <p>Você será redirecionado automaticamente...</p>
-                        <a href="${redirectUrl}" class="manual-link" rel="noreferrer">Continuar manualmente</a>
-                    </div>
-                    
-                    <script>
-                        // Detecta bots
-                        const userAgent = navigator.userAgent.toLowerCase();
-                        const botPatterns = [
-                            'googlebot', 'bingbot', 'slurp', 'duckduckbot', 'baiduspider',
-                            'yandexbot', 'facebookexternalhit', 'twitterbot', 'rogerbot',
-                            'linkedinbot', 'embedly', 'quora link preview', 'showyoubot',
-                            'outbrain', 'pinterest', 'slackbot', 'redditbot', 'applebot'
-                        ];
-                        
-                        const isBot = botPatterns.some(pattern => userAgent.includes(pattern));
-                        
-                        if (isBot) {
-                            document.body.innerHTML = '<div style="text-align:center;padding:50px;color:#666;">Acesso restrito</div>';
-                            return;
-                        }
-                        
-                        // Redirecionamento JavaScript com no-referrer
-                        setTimeout(() => {
-                            const link = document.createElement('a');
-                            link.href = '${redirectUrl}';
-                            link.rel = 'noreferrer';
-                            link.target = '_self';
-                            link.style.display = 'none';
-                            document.body.appendChild(link);
-                            link.click();
-                        }, ${CONFIG.REDIRECT_DELAY});
-                    </script>
-                </body>
-                </html>
-                `;
-                
-                res.send(redirectHtml);
+                // Redirecionar diretamente sem página intermediária
+                res.redirect(302, redirectUrl);
                 return;
             } else {
                 // Não faz redirecionamento, retorna apenas o conteúdo proxy
@@ -1704,12 +1599,6 @@ app.get('/test-referer-generator', (req, res) => {
     res.send(generatorHtml);
 });
 
-// Serve o Service Worker file
-app.get('/sw-referer-spoof.js', (req, res) => {
-    res.setHeader('Content-Type', 'application/javascript');
-    res.setHeader('Service-Worker-Allowed', '/');
-    res.sendFile(path.join(__dirname, 'sw-referer-spoof.js'));
-});
 
 // Endpoint para testar referer spoofing via cURL no servidor
 app.get('/test-curl-spoof', async (req, res) => {
