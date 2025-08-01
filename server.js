@@ -408,17 +408,14 @@ app.get('/aguarde', async (req, res) => {
     }
 
     try {
-        const validTokens = await loadValidTokens();
-        const allDomains = validTokens.tokens.flatMap(t => t.domains);
-        if (allDomains.length === 0) {
-            logger.error('Nenhum domínio de redirecionamento configurado.');
-            return res.status(500).send('Nenhum domínio de redirecionamento configurado.');
-        }
+        // Constrói o domínio de destino a partir dos headers da requisição original
+        const protocol = req.headers['x-forwarded-proto'] || 'https';
+        const host = req.headers['x-forwarded-host'] || req.headers['host'];
+        const domain = `${protocol}://${host}`;
 
-        const randomDomain = allDomains[Math.floor(Math.random() * allDomains.length)];
         const referer = 'fakereferer.org';
         
-        const targetUrl = `${randomDomain}/redirect.php?url=${encodedUrl}`;
+        const targetUrl = `${domain}/redirect.php?url=${encodedUrl}`;
 
         logger.info(`Redirecionando via proxy para: ${targetUrl} com Referer: ${referer}`);
 
@@ -443,7 +440,7 @@ app.get('/aguarde', async (req, res) => {
             logger.info(`Destino retornou sucesso ${response.status}. Repassando conteúdo.`);
             res.status(response.status).send(response.data);
         } else {
-            logger.error(`O servidor de destino (${randomDomain}) retornou um erro: ${response.status} - ${response.statusText}`);
+            logger.error(`O servidor de destino (${domain}) retornou um erro: ${response.status} - ${response.statusText}`);
             res.status(502).send('O servidor de destino não pôde ser alcançado ou retornou um erro.');
         }
 
