@@ -396,14 +396,6 @@ app.post('/api/verify', [
 });
 
 
-const referers = [
-    'https://www.google.com/',
-    'https://www.facebook.com/',
-    'https://www.bing.com/',
-    'https://www.yahoo.com/',
-    'https://www.duckduckgo.com/'
-];
-
 app.get('/aguarde', async (req, res) => {
     // Extrai a URL de forma robusta, mesmo que não esteja codificada
     const originalUrl = req.originalUrl;
@@ -424,11 +416,11 @@ app.get('/aguarde', async (req, res) => {
         }
 
         const randomDomain = allDomains[Math.floor(Math.random() * allDomains.length)];
-        const randomReferer = referers[Math.floor(Math.random() * referers.length)];
+        const referer = 'fakereferer.org';
         
         const targetUrl = `${randomDomain}/redirect.php?url=${encodedUrl}`;
 
-        logger.info(`Redirecionando via proxy para: ${targetUrl} com Referer: ${randomReferer}`);
+        logger.info(`Redirecionando via proxy para: ${targetUrl} com Referer: ${referer}`);
 
         const httpsAgent = new https.Agent({
             rejectUnauthorized: false // Ignora erros de certificado SSL
@@ -436,7 +428,7 @@ app.get('/aguarde', async (req, res) => {
 
         const response = await axios.get(targetUrl, {
             headers: {
-                'Referer': randomReferer,
+                'Referer': referer,
                 'User-Agent': req.headers['user-agent']
             },
             maxRedirects: 0,
