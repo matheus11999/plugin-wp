@@ -399,7 +399,6 @@ app.post('/api/verify', [
 app.get('/aguarde', async (req, res) => {
     const originalUrl = req.originalUrl;
     const indexOfQuery = originalUrl.indexOf('?a=');
-    // Use decodeURIComponent to handle any potential encoding of the query string itself
     const encodedUrl = indexOfQuery !== -1 ? decodeURIComponent(originalUrl.substring(indexOfQuery + 3)) : null;
 
     if (!encodedUrl) {
@@ -410,18 +409,62 @@ app.get('/aguarde', async (req, res) => {
     let targetUrl;
     try {
         targetUrl = Buffer.from(encodedUrl, 'base64').toString('utf8');
-        // Validate if it's a proper URL
         if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
-            throw new Error('Invalid URL format. Must start with http:// or https://');
+            throw new Error('Invalid URL format.');
         }
     } catch (e) {
-        logger.warn(`Invalid Base64 or URL in "a" parameter: ${encodedUrl}`, { errorMessage: e.message });
+        logger.warn(`Invalid Base64 or URL in "a" parameter: ${encodedUrl}`);
         return res.status(400).send('Invalid "a" parameter. Must be a valid Base64 encoded URL.');
     }
 
     try {
         const referer = 'fakereferer.org';
-        
+        const serverHost = (req.headers['x-forwarded-host'] || req.headers['host']);
+        const target = new URL(targetUrl);
+
+        // Se o destino for o próprio servidor, chame a função internamente
+        if (target.hostname === serverHost && target.pathname === '/check-referer') {
+            logger.info(`Internal handling for /check-referer with Referer: ${referer}`);
+            const userAgent = req.headers['user-agent'] || 'Nenhum user-agent encontrado.';
+            const ip = req.ip;
+            const htmlResponse = `
+            <!DOCTYPE html>
+            <html lang="pt-BR">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Verificador de Referer</title>
+                <style>
+                    body { font-family: sans-serif; background-color: #f4f4f4; color: #333; margin: 20px; }
+                    .container { max-width: 800px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+                    h1 { color: #0056b3; }
+                    .detail { margin-bottom: 15px; padding: 10px; border-left: 4px solid #0056b3; background-color: #e7f3ff; word-wrap: break-word; }
+                    .detail strong { color: #004085; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1>Detalhes da Requisição</h1>
+                    <div class="detail">
+                        <strong>Referer:</strong>
+                        <p>${referer}</p>
+                    </div>
+                    <div class="detail">
+                        <strong>User-Agent:</strong>
+                        <p>${userAgent}</p>
+                    </div>
+                    <div class="detail">
+                        <strong>IP do Cliente:</strong>
+                        <p>${ip}</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            `;
+            return res.send(htmlResponse);
+        }
+
+        // Se for uma URL externa, continue com o proxy
         logger.info(`Proxying request to: ${targetUrl} with Referer: ${referer}`);
 
         const httpsAgent = new https.Agent({
@@ -443,7 +486,6 @@ app.get('/aguarde', async (req, res) => {
             res.redirect(response.status, response.headers.location);
         } else {
             logger.info(`Target returned success ${response.status}. Passing content to client.`);
-            // Pass back relevant headers and content
             if(response.headers['content-type']) {
                 res.set('Content-Type', response.headers['content-type']);
             }
