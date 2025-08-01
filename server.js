@@ -413,11 +413,9 @@ app.get('/aguarde', async (req, res) => {
         let redirectUrl;
 
         if (debugMode) {
-            // Em modo de depuração, redireciona para o verificador de referer.
             redirectUrl = '/check-referer';
             logger.info(`Modo de depuração ativado. Redirecionando para ${redirectUrl}`);
         } else {
-            // Modo normal: seleciona um domínio aleatório e prepara o redirecionamento.
             const validTokens = await loadValidTokens();
             const allDomains = validTokens.tokens.flatMap(t => t.domains);
             if (allDomains.length === 0) {
@@ -431,18 +429,16 @@ app.get('/aguarde', async (req, res) => {
         
         let htmlContent = await fs.readFile(path.join(__dirname, 'wait.html'), 'utf8');
         
-        // Usa window.location.replace para um redirecionamento mais robusto
-        const script = `
+        const nonce = crypto.randomBytes(16).toString('base64');
+        const script = `<script nonce="${nonce}">
             setTimeout(function() {
                 window.location.replace('${redirectUrl}');
             }, 2000);
-        `;
+        </script>`;
 
-        htmlContent = htmlContent.replace(
-            '// This is where the server will inject the redirect logic',
-            script
-        );
+        htmlContent = htmlContent.replace('<!-- SCRIPT_PLACEHOLDER -->', script);
 
+        res.setHeader('Content-Security-Policy', `script-src 'self' 'nonce-${nonce}'`);
         res.send(htmlContent);
     } catch (error) {
         logger.error('Erro no endpoint /aguarde:', error);
