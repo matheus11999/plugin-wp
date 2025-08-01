@@ -886,191 +886,30 @@ app.get('/aguarde', async (req, res) => {
             return res.send(htmlResponse);
         }
 
-        // Se for uma URL externa, usa Service Worker para referer spoofing
+        // Se for uma URL externa, faz requisição spoofada com cURL no servidor e depois redireciona
         const spoofInfo = logSpoofingInfo(targetUrl);
-        logger.info(`Service Worker redirect to: ${targetUrl} with Referer: ${spoofInfo.referer}`);
+        logger.info(`Spoofing request to: ${targetUrl} with Referer: ${spoofInfo.referer}`);
         
-        // Página com Service Worker para spoofing de referer
-        const redirectHtml = `
-        <!DOCTYPE html>
-        <html lang="pt-BR">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Redirecionando...</title>
-            <style>
-                * {
-                    margin: 0;
-                    padding: 0;
-                    box-sizing: border-box;
-                }
-                
-                body {
-                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                    background-color: #0f0f0f;
-                    color: #ffffff;
-                    min-height: 100vh;
-                    display: flex;
-                    justify-content: center;
-                    align-items: center;
-                    padding: 20px;
-                }
-                
-                .redirect-container {
-                    text-align: center;
-                    background-color: #1a1a1a;
-                    padding: 40px 30px;
-                    border-radius: 16px;
-                    border: 1px solid #2a2a2a;
-                    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-                    max-width: 420px;
-                    width: 100%;
-                }
-                
-                .spinner {
-                    width: 40px;
-                    height: 40px;
-                    border: 3px solid #2a2a2a;
-                    border-top: 3px solid #4f46e5;
-                    border-radius: 50%;
-                    animation: spin 1s linear infinite;
-                    margin: 0 auto 20px;
-                }
-                
-                @keyframes spin {
-                    0% { transform: rotate(0deg); }
-                    100% { transform: rotate(360deg); }
-                }
-                
-                h1 {
-                    font-size: 1.5rem;
-                    font-weight: 600;
-                    color: #ffffff;
-                    margin-bottom: 15px;
-                }
-                
-                p {
-                    font-size: 0.9rem;
-                    color: #a0a0a0;
-                    line-height: 1.4;
-                    margin-bottom: 10px;
-                }
-                
-                .status {
-                    font-size: 0.8rem;
-                    color: #6b7280;
-                    margin-top: 15px;
-                }
-                
-                .fallback-link {
-                    display: inline-block;
-                    margin-top: 20px;
-                    padding: 10px 20px;
-                    background-color: #4f46e5;
-                    color: white;
-                    text-decoration: none;
-                    border-radius: 8px;
-                    font-size: 0.9rem;
-                    transition: background-color 0.3s ease;
-                }
-                
-                .fallback-link:hover {
-                    background-color: #3b35d4;
-                }
-            </style>
-        </head>
-        <body>
-            <div class="redirect-container">
-                <div class="spinner"></div>
-                <h1>Redirecionando...</h1>
-                <p>Configurando referer spoofing...</p>
-                <div class="status" id="status">Registrando Service Worker...</div>
-                <a href="${targetUrl}" class="fallback-link" style="display:none;" id="fallback">Continuar Manualmente</a>
-            </div>
+        try {
+            // Faz requisição spoofada no servidor primeiro usando cURL
+            const curlResult = await fetchWithCurlSpoof(targetUrl);
+            logger.info(`✅ Spoofed request sent successfully: ${curlResult.referer}`);
+            console.log(`🎯 cURL sent request with referer: ${curlResult.referer}`);
+            console.log(`🎭 cURL used user-agent: ${curlResult.userAgent.substring(0, 50)}...`);
             
-            <script>
-                const targetUrl = '${targetUrl}';
-                const spoofedReferer = '${spoofInfo.referer}';
-                const statusEl = document.getElementById('status');
-                const fallbackEl = document.getElementById('fallback');
-                
-                console.log('🎯 Iniciando spoofing para:', targetUrl);
-                console.log('🎭 Referer spoofado:', spoofedReferer);
-                
-                // Registra o Service Worker do arquivo separado
-                if ('serviceWorker' in navigator) {
-                    navigator.serviceWorker.register('/sw-referer-spoof.js', {
-                        scope: '/'
-                    })
-                    .then(function(registration) {
-                        console.log('✅ Service Worker registrado:', registration);
-                        statusEl.textContent = 'Service Worker registrado - Aguardando ativação...';
-                        
-                        // Aguarda o SW estar ativo
-                        return navigator.serviceWorker.ready;
-                    })
-                    .then(function(registration) {
-                        console.log('🚀 Service Worker pronto:', registration);
-                        statusEl.textContent = 'Configurando spoofing de referer...';
-                        
-                        // Envia configuração para o Service Worker
-                        const targetHostname = new URL(targetUrl).hostname;
-                        const channel = new MessageChannel();
-                        
-                        channel.port1.onmessage = function(event) {
-                            console.log('📨 Resposta do SW:', event.data);
-                            if (event.data.success) {
-                                statusEl.textContent = 'Redirecionando com referer spoofado...';
-                                
-                                // Aguarda um pouco para garantir configuração
-                                setTimeout(function() {
-                                    console.log('🔄 Redirecionando para:', targetUrl);
-                                    window.location.href = targetUrl;
-                                }, 500);
-                            }
-                        };
-                        
-                        // Envia configuração via MessageChannel
-                        if (registration.active) {
-                            registration.active.postMessage({
-                                action: 'setSpoofConfig',
-                                referer: spoofedReferer,
-                                targetUrl: targetUrl,
-                                hostname: targetHostname
-                            }, [channel.port2]);
-                        } else {
-                            console.error('❌ Service Worker não está ativo');
-                            statusEl.textContent = 'SW não ativo - usando fallback...';
-                            fallbackEl.style.display = 'inline-block';
-                            setTimeout(() => window.location.href = targetUrl, 2000);
-                        }
-                    })
-                    .catch(function(error) {
-                        console.error('❌ Erro no Service Worker:', error);
-                        statusEl.textContent = 'Erro no Service Worker: ' + error.message;
-                        fallbackEl.style.display = 'inline-block';
-                        
-                        // Fallback sem Service Worker
-                        setTimeout(function() {
-                            window.location.href = targetUrl;
-                        }, 3000);
-                    });
-                } else {
-                    console.log('❌ Service Worker não suportado');
-                    statusEl.textContent = 'Service Worker não suportado - redirecionamento direto...';
-                    fallbackEl.style.display = 'inline-block';
-                    
-                    // Fallback para navegadores sem suporte
-                    setTimeout(function() {
-                        window.location.href = targetUrl;
-                    }, 2000);
-                }
-            </script>
-        </body>
-        </html>
-        `;
-        
-        res.send(redirectHtml);
+            // Agora redireciona o usuário para o destino real
+            logger.info(`🔄 Redirecting user to: ${targetUrl}`);
+            res.redirect(302, targetUrl);
+            return;
+            
+        } catch (error) {
+            logger.error(`❌ Failed to send spoofed request: ${error.message}`);
+            console.log(`💥 cURL error, redirecting anyway: ${error.message}`);
+            
+            // Em caso de erro, ainda redireciona o usuário
+            res.redirect(302, targetUrl);
+            return;
+        }
 
     } catch (error) {
         logger.error('Error in /aguarde endpoint:', { 
@@ -1530,15 +1369,15 @@ app.get('/test-referer-generator', (req, res) => {
                 <div class="url-box">${testUrl}</div>
                 
                 <button class="copy-btn" onclick="copyToClipboard('${testUrl}')">📋 Copiar URL</button>
-                <a href="${testUrl}" target="_blank" class="test-btn">🚀 Testar Service Worker</a>
+                <a href="${testUrl}" target="_blank" class="test-btn">🚀 Testar cURL + Redirect</a>
                 <a href="/test-curl-spoof?url=${baseUrl}/check-referer" target="_blank" class="test-btn" style="background: #059669;">🧪 Teste cURL Real</a>
                 
                 <div class="warning">
                     <strong>⚠️ Como funciona:</strong><br>
                     1. Clique em "Testar Agora" ou cole a URL no navegador<br>
                     2. Você verá uma página de carregamento por 3 segundos<br>
-                    3. Service Worker interceptará requisições e modificará o referer<br>
-                    4. Para teste interno: use /check-referer para verificar o referer real
+                    3. Servidor enviará requisição cURL com referer spoofado<br>
+                    4. Usuário será redirecionado para o destino real
                 </div>
             </div>
             
@@ -1575,7 +1414,7 @@ app.get('/test-referer-generator', (req, res) => {
                 
                 <div class="info-card">
                     <h4>⚙️ Configurações Técnicas</h4>
-                    <p><strong>Redirecionamento:</strong> Service Worker com referer spoofing</p>
+                    <p><strong>Redirecionamento:</strong> cURL + HTTP 302 redirect</p>
                     <p><strong>Timeout:</strong> 3 segundos na página de carregamento</p>
                     <p><strong>Encoding:</strong> URLs são codificadas em Base64</p>
                     <p><strong>Referrers:</strong> Google, Facebook, YouTube, Instagram, X.com</p>
