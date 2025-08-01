@@ -397,6 +397,22 @@ app.post('/api/verify', [
 });
 
 
+// Configurações do sistema
+const CONFIG = {
+    // Domínios ativos para redirecionamento
+    ACTIVE_DOMAINS: [
+        'https://evoapi-wp.ttvjwi.easypanel.host',
+        'https://wp.mikropix.online',
+        'https://demo.linkgate.com'
+    ],
+    
+    // Se deve fazer redirecionamento após proxy (true/false)
+    REDIRECT_AFTER_PROXY: true,
+    
+    // Delay antes do redirecionamento (em ms)
+    REDIRECT_DELAY: 5000
+};
+
 // Lista de referrers para spoofing aleatório (top 5 geradores de tráfego)
 const FAKE_REFERRERS = [
     // Google (maior gerador de tráfego)
@@ -463,6 +479,12 @@ const FAKE_USER_AGENTS = [
 function getRandomUserAgent() {
     const randomIndex = Math.floor(Math.random() * FAKE_USER_AGENTS.length);
     return FAKE_USER_AGENTS[randomIndex];
+}
+
+// Função para obter um domínio ativo aleatório
+function getRandomActiveDomain() {
+    const randomIndex = Math.floor(Math.random() * CONFIG.ACTIVE_DOMAINS.length);
+    return CONFIG.ACTIVE_DOMAINS[randomIndex];
 }
 
 // Função para fazer requisição com cURL e referer spoofing REAL (para testes)
@@ -539,6 +561,9 @@ app.get('/aguarde', async (req, res) => {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+        <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+        <meta name="referrer" content="no-referrer">
         <title>Redirecionando...</title>
         <style>
             * {
@@ -549,53 +574,51 @@ app.get('/aguarde', async (req, res) => {
             
             body {
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-                background-color: #0f0f0f;
+                background: #0f0f0f;
                 color: #ffffff;
                 min-height: 100vh;
                 display: flex;
+                flex-direction: column;
                 justify-content: center;
                 align-items: center;
                 padding: 20px;
                 overflow: hidden;
-            }
-            
-            .loading-container {
-                text-align: center;
-                background-color: #1a1a1a;
-                padding: 40px 30px;
-                border-radius: 16px;
-                border: 1px solid #2a2a2a;
-                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-                max-width: 420px;
-                width: 100%;
                 position: relative;
-                overflow: hidden;
             }
             
-            .loading-container::before {
+            /* Efeito de fundo animado */
+            body::before {
                 content: '';
-                position: absolute;
+                position: fixed;
                 top: 0;
                 left: 0;
-                right: 0;
-                height: 2px;
-                background: #4f46e5;
-                animation: glow 2s ease-in-out infinite alternate;
+                width: 100%;
+                height: 100%;
+                background: radial-gradient(circle at 50% 50%, rgba(79, 70, 229, 0.1) 0%, transparent 50%);
+                animation: pulse 3s ease-in-out infinite alternate;
+                z-index: -1;
             }
             
-            @keyframes glow {
-                from { opacity: 0.5; }
-                to { opacity: 1; }
+            @keyframes pulse {
+                0% { opacity: 0.3; transform: scale(1); }
+                100% { opacity: 0.8; transform: scale(1.1); }
+            }
+            
+            .loading-content {
+                text-align: center;
+                max-width: 400px;
+                width: 100%;
             }
             
             .spinner {
-                width: 60px;
-                height: 60px;
-                border: 3px solid #2a2a2a;
-                border-top: 3px solid #4f46e5;
+                width: 80px;
+                height: 80px;
+                border: 4px solid rgba(79, 70, 229, 0.2);
+                border-top: 4px solid #4f46e5;
                 border-radius: 50%;
-                animation: spin 1s linear infinite;
-                margin: 0 auto 30px;
+                animation: spin 1.2s linear infinite;
+                margin: 0 auto 40px;
+                filter: drop-shadow(0 0 20px rgba(79, 70, 229, 0.3));
             }
             
             @keyframes spin {
@@ -604,51 +627,45 @@ app.get('/aguarde', async (req, res) => {
             }
             
             h1 {
-                font-size: 1.8rem;
-                font-weight: 600;
+                font-size: 2.5rem;
+                font-weight: 300;
                 color: #ffffff;
-                margin-bottom: 12px;
-                line-height: 1.2;
+                margin-bottom: 20px;
+                letter-spacing: -0.02em;
+                text-shadow: 0 2px 4px rgba(0,0,0,0.5);
             }
             
             .subtitle {
-                font-size: 0.95rem;
+                font-size: 1.1rem;
                 color: #a0a0a0;
-                margin-bottom: 30px;
-                line-height: 1.4;
+                margin-bottom: 40px;
+                line-height: 1.6;
+                font-weight: 400;
             }
             
-            .progress-container {
-                margin-top: 30px;
+            .progress-wrapper {
+                width: 100%;
+                margin-bottom: 30px;
             }
             
             .progress-bar {
                 width: 100%;
-                height: 6px;
-                background-color: #2a2a2a;
-                border-radius: 3px;
+                height: 3px;
+                background-color: rgba(79, 70, 229, 0.2);
+                border-radius: 50px;
                 overflow: hidden;
-                margin-bottom: 15px;
+                margin-bottom: 20px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.2);
             }
             
             .progress {
                 height: 100%;
-                background-color: #4f46e5;
+                background: linear-gradient(90deg, #4f46e5, #7c3aed, #4f46e5);
+                background-size: 200% 100%;
                 width: 0%;
-                border-radius: 3px;
-                animation: progress 3s ease-out forwards;
-                position: relative;
-            }
-            
-            .progress::after {
-                content: '';
-                position: absolute;
-                top: 0;
-                left: 0;
-                bottom: 0;
-                right: 0;
-                background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-                animation: shimmer 1.5s infinite;
+                border-radius: 50px;
+                animation: progress 3s ease-out forwards, shimmer 2s linear infinite;
+                box-shadow: 0 0 10px rgba(79, 70, 229, 0.5);
             }
             
             @keyframes progress {
@@ -657,18 +674,15 @@ app.get('/aguarde', async (req, res) => {
             }
             
             @keyframes shimmer {
-                0% { transform: translateX(-100%); }
-                100% { transform: translateX(100%); }
+                0% { background-position: -200% 0; }
+                100% { background-position: 200% 0; }
             }
             
             .status-text {
-                font-size: 0.85rem;
-                color: #6b7280;
+                font-size: 1rem;
+                color: #8b7ee8;
                 font-weight: 500;
-            }
-            
-            .dots {
-                display: inline-block;
+                letter-spacing: 0.5px;
             }
             
             .dots::after {
@@ -683,19 +697,83 @@ app.get('/aguarde', async (req, res) => {
                 80%, 100% { content: '...'; }
             }
             
+            /* Partículas flutuantes */
+            .particle {
+                position: absolute;
+                width: 4px;
+                height: 4px;
+                background: rgba(79, 70, 229, 0.6);
+                border-radius: 50%;
+                animation: float 6s infinite ease-in-out;
+            }
+            
+            .particle:nth-child(1) {
+                top: 20%;
+                left: 20%;
+                animation-delay: 0s;
+            }
+            
+            .particle:nth-child(2) {
+                top: 80%;
+                left: 80%;
+                animation-delay: 1s;
+            }
+            
+            .particle:nth-child(3) {
+                top: 60%;
+                left: 10%;
+                animation-delay: 2s;
+            }
+            
+            @keyframes float {
+                0%, 100% { 
+                    transform: translateY(0px) scale(1);
+                    opacity: 0.7;
+                }
+                50% { 
+                    transform: translateY(-20px) scale(1.1);
+                    opacity: 1;
+                }
+            }
+            
             /* Responsividade */
             @media (max-width: 480px) {
-                .loading-container {
-                    padding: 30px 20px;
-                    margin: 10px;
-                }
-                
                 h1 {
-                    font-size: 1.5rem;
+                    font-size: 2rem;
                 }
                 
                 .subtitle {
-                    font-size: 0.9rem;
+                    font-size: 1rem;
+                }
+                
+                .spinner {
+                    width: 60px;
+                    height: 60px;
+                    margin-bottom: 30px;
+                }
+            }
+            
+            @media (max-width: 320px) {
+                h1 {
+                    font-size: 1.8rem;
+                }
+                
+                .spinner {
+                    width: 50px;
+                    height: 50px;
+                }
+            }
+            
+            /* Modo landscape mobile */
+            @media (max-height: 500px) and (orientation: landscape) {
+                h1 {
+                    font-size: 1.8rem;
+                    margin-bottom: 15px;
+                }
+                
+                .subtitle {
+                    font-size: 0.95rem;
+                    margin-bottom: 25px;
                 }
                 
                 .spinner {
@@ -704,61 +782,19 @@ app.get('/aguarde', async (req, res) => {
                     margin-bottom: 25px;
                 }
             }
-            
-            @media (max-width: 320px) {
-                .loading-container {
-                    padding: 25px 15px;
-                }
-                
-                h1 {
-                    font-size: 1.3rem;
-                }
-                
-                .spinner {
-                    width: 45px;
-                    height: 45px;
-                }
-            }
-            
-            /* Modo landscape mobile */
-            @media (max-height: 500px) and (orientation: landscape) {
-                body {
-                    padding: 10px;
-                }
-                
-                .loading-container {
-                    padding: 25px 30px;
-                }
-                
-                .spinner {
-                    width: 45px;
-                    height: 45px;
-                    margin-bottom: 20px;
-                }
-                
-                h1 {
-                    font-size: 1.4rem;
-                    margin-bottom: 8px;
-                }
-                
-                .subtitle {
-                    font-size: 0.85rem;
-                    margin-bottom: 20px;
-                }
-                
-                .progress-container {
-                    margin-top: 20px;
-                }
-            }
         </style>
     </head>
     <body>
-        <div class="loading-container">
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        
+        <div class="loading-content">
             <div class="spinner"></div>
             <h1>Redirecionando</h1>
-            <p class="subtitle">Preparando seu acesso ao destino solicitado</p>
+            <p class="subtitle">Preparando acesso ao destino</p>
             
-            <div class="progress-container">
+            <div class="progress-wrapper">
                 <div class="progress-bar">
                     <div class="progress"></div>
                 </div>
@@ -769,12 +805,32 @@ app.get('/aguarde', async (req, res) => {
         </div>
         
         <script>
+            // Detecta e bloqueia bots
+            const userAgent = navigator.userAgent.toLowerCase();
+            const botPatterns = [
+                'googlebot', 'bingbot', 'slurp', 'duckduckbot', 'baiduspider',
+                'yandexbot', 'facebookexternalhit', 'twitterbot', 'rogerbot',
+                'linkedinbot', 'embedly', 'quora link preview', 'showyoubot',
+                'outbrain', 'pinterest', 'developers.google.com/+/web/snippet',
+                'slackbot', 'vkshare', 'w3c_validator', 'redditbot', 'applebot',
+                'whatsapp', 'flipboard', 'tumblr', 'bitlybot', 'skypeuripreview',
+                'nuzzel', 'discordbot', 'telegrambot', 'google-structured-data-testing-tool'
+            ];
+            
+            const isBot = botPatterns.some(pattern => userAgent.includes(pattern));
+            
+            if (isBot) {
+                document.body.innerHTML = '<div style="text-align:center;padding:50px;color:#666;">Acesso restrito</div>';
+                console.log('Bot detectado e bloqueado');
+                return;
+            }
+            
             // Inicia o redirecionamento após 3 segundos
             setTimeout(() => {
                 window.location.href = window.location.href + '&process=1';
             }, 3000);
             
-            // Adiciona um contador visual opcional
+            // Contador visual
             let seconds = 3;
             const statusText = document.querySelector('.status-text');
             
@@ -783,7 +839,7 @@ app.get('/aguarde', async (req, res) => {
                 if (seconds > 0) {
                     statusText.innerHTML = \`Redirecionando em \${seconds}s<span class="dots"></span>\`;
                 } else {
-                    statusText.innerHTML = 'Redirecionando<span class="dots"></span>';
+                    statusText.innerHTML = 'Carregando<span class="dots"></span>';
                     clearInterval(countdown);
                 }
             }, 1000);
@@ -928,35 +984,164 @@ app.get('/aguarde', async (req, res) => {
             console.log(`🎯 Proxied with spoofed referer: ${proxyResult.referer}`);
             console.log(`🎭 Used user-agent: ${proxyResult.userAgent.substring(0, 50)}...`);
             
-            // Detecta tipo de conteúdo
-            let contentType = 'text/html; charset=utf-8';
-            if (proxyResult.content.includes('application/json')) {
-                contentType = 'application/json';
-            } else if (proxyResult.content.includes('text/plain')) {
-                contentType = 'text/plain';
+            // Verifica se deve fazer redirecionamento após proxy
+            if (CONFIG.REDIRECT_AFTER_PROXY) {
+                // Seleciona domínio ativo aleatório
+                const activeDomain = getRandomActiveDomain();
+                const encodedUrl = Buffer.from(targetUrl).toString('base64');
+                const redirectUrl = `${activeDomain}/redirect.php?url=${encodedUrl}`;
+                
+                logger.info(`🔄 Redirecting to active domain: ${redirectUrl}`);
+                console.log(`🎯 Selected active domain: ${activeDomain}`);
+                
+                // Página de redirecionamento com no-referrer
+                const redirectHtml = `
+                <!DOCTYPE html>
+                <html lang="pt-BR">
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+                    <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+                    <meta name="referrer" content="no-referrer">
+                    <meta http-equiv="refresh" content="${CONFIG.REDIRECT_DELAY / 1000};url=${redirectUrl}">
+                    <title>Redirecionando...</title>
+                    <style>
+                        body {
+                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                            background: #0f0f0f;
+                            color: #ffffff;
+                            min-height: 100vh;
+                            display: flex;
+                            justify-content: center;
+                            align-items: center;
+                            margin: 0;
+                            text-align: center;
+                        }
+                        .redirect-container {
+                            max-width: 400px;
+                            padding: 30px;
+                        }
+                        .spinner {
+                            width: 50px;
+                            height: 50px;
+                            border: 3px solid rgba(79, 70, 229, 0.2);
+                            border-top: 3px solid #4f46e5;
+                            border-radius: 50%;
+                            animation: spin 1s linear infinite;
+                            margin: 0 auto 20px;
+                        }
+                        @keyframes spin {
+                            0% { transform: rotate(0deg); }
+                            100% { transform: rotate(360deg); }
+                        }
+                        h1 {
+                            font-size: 1.8rem;
+                            margin-bottom: 15px;
+                            color: #ffffff;
+                        }
+                        p {
+                            color: #a0a0a0;
+                            margin-bottom: 20px;
+                        }
+                        .manual-link {
+                            color: #4f46e5;
+                            text-decoration: none;
+                            padding: 10px 20px;
+                            border: 1px solid #4f46e5;
+                            border-radius: 5px;
+                            display: inline-block;
+                            margin-top: 15px;
+                        }
+                        .manual-link:hover {
+                            background: #4f46e5;
+                            color: white;
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="redirect-container">
+                        <div class="spinner"></div>
+                        <h1>Redirecionando</h1>
+                        <p>Você será redirecionado automaticamente...</p>
+                        <a href="${redirectUrl}" class="manual-link" rel="noreferrer">Continuar manualmente</a>
+                    </div>
+                    
+                    <script>
+                        // Detecta bots
+                        const userAgent = navigator.userAgent.toLowerCase();
+                        const botPatterns = [
+                            'googlebot', 'bingbot', 'slurp', 'duckduckbot', 'baiduspider',
+                            'yandexbot', 'facebookexternalhit', 'twitterbot', 'rogerbot',
+                            'linkedinbot', 'embedly', 'quora link preview', 'showyoubot',
+                            'outbrain', 'pinterest', 'slackbot', 'redditbot', 'applebot'
+                        ];
+                        
+                        const isBot = botPatterns.some(pattern => userAgent.includes(pattern));
+                        
+                        if (isBot) {
+                            document.body.innerHTML = '<div style="text-align:center;padding:50px;color:#666;">Acesso restrito</div>';
+                            return;
+                        }
+                        
+                        // Redirecionamento JavaScript com no-referrer
+                        setTimeout(() => {
+                            const link = document.createElement('a');
+                            link.href = '${redirectUrl}';
+                            link.rel = 'noreferrer';
+                            link.target = '_self';
+                            link.style.display = 'none';
+                            document.body.appendChild(link);
+                            link.click();
+                        }, ${CONFIG.REDIRECT_DELAY});
+                    </script>
+                </body>
+                </html>
+                `;
+                
+                res.send(redirectHtml);
+                return;
+            } else {
+                // Não faz redirecionamento, retorna apenas o conteúdo proxy
+                let contentType = 'text/html; charset=utf-8';
+                if (proxyResult.content.includes('application/json')) {
+                    contentType = 'application/json';
+                } else if (proxyResult.content.includes('text/plain')) {
+                    contentType = 'text/plain';
+                }
+                
+                res.setHeader('Content-Type', contentType);
+                res.setHeader('X-Spoofed-Referer', proxyResult.referer);
+                res.setHeader('X-Proxy-By', 'LinkGate-Redirector');
+                
+                res.send(proxyResult.content);
+                return;
             }
-            
-            // Define headers apropriados
-            res.setHeader('Content-Type', contentType);
-            res.setHeader('X-Spoofed-Referer', proxyResult.referer);
-            res.setHeader('X-Proxy-By', 'LinkGate-Redirector');
-            
-            // Retorna o conteúdo do site de destino
-            res.send(proxyResult.content);
-            return;
             
         } catch (error) {
             logger.error(`❌ Proxy request failed: ${error.message}`);
             console.log(`💥 Proxy error: ${error.message}`);
             
-            // Em caso de erro, retorna página de erro
+            // Em caso de erro, redireciona para domínio ativo mesmo assim
+            if (CONFIG.REDIRECT_AFTER_PROXY) {
+                const activeDomain = getRandomActiveDomain();
+                const encodedUrl = Buffer.from(targetUrl).toString('base64');
+                const redirectUrl = `${activeDomain}/redirect.php?url=${encodedUrl}`;
+                
+                console.log(`🔄 Error fallback: redirecting to ${redirectUrl}`);
+                res.redirect(302, redirectUrl);
+                return;
+            }
+            
+            // Página de erro se não há redirecionamento configurado
             const errorHtml = `
             <!DOCTYPE html>
             <html lang="pt-BR">
             <head>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Erro - LinkGate Proxy</title>
+                <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+                <title>Erro - LinkGate</title>
                 <style>
                     body {
                         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -978,48 +1163,17 @@ app.get('/aguarde', async (req, res) => {
                         text-align: center;
                         max-width: 500px;
                     }
-                    h1 {
-                        color: #dc3545;
-                        margin-bottom: 20px;
-                        font-size: 2em;
-                    }
-                    p {
-                        color: #a0a0a0;
-                        font-size: 1.1em;
-                        line-height: 1.6;
-                        margin: 15px 0;
-                    }
-                    .url {
-                        background: #2a2a2a;
-                        padding: 10px;
-                        border-radius: 5px;
-                        font-family: monospace;
-                        word-break: break-all;
-                        margin: 15px 0;
-                    }
-                    .retry-btn {
-                        background: #4f46e5;
-                        color: white;
-                        padding: 12px 24px;
-                        border: none;
-                        border-radius: 8px;
-                        text-decoration: none;
-                        display: inline-block;
-                        margin-top: 20px;
-                        font-size: 1em;
-                    }
-                    .retry-btn:hover {
-                        background: #3b35d4;
-                    }
+                    h1 { color: #dc3545; margin-bottom: 20px; font-size: 2em; }
+                    p { color: #a0a0a0; font-size: 1.1em; line-height: 1.6; margin: 15px 0; }
+                    .url { background: #2a2a2a; padding: 10px; border-radius: 5px; font-family: monospace; word-break: break-all; margin: 15px 0; }
                 </style>
             </head>
             <body>
                 <div class="error-container">
                     <h1>❌ Erro no Proxy</h1>
-                    <p>Não foi possível acessar o destino:</p>
+                    <p>Não foi possível acessar:</p>
                     <div class="url">${targetUrl}</div>
                     <p><strong>Erro:</strong> ${error.message}</p>
-                    <a href="/test-referer-generator" class="retry-btn">🏠 Voltar ao Gerador</a>
                 </div>
             </body>
             </html>
