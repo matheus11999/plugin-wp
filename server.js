@@ -759,9 +759,17 @@ app.get('/aguarde', async (req, res) => {
                 document.body.innerHTML = '<div style="text-align:center;padding:50px;color:#666;">Acesso restrito</div>';
                 console.log('Bot detectado e bloqueado');
             } else {
+                // Obter a URL base sem parâmetros de controle interno
+                const currentUrl = new URL(window.location.href);
+                const baseUrl = currentUrl.origin + currentUrl.pathname;
+                const urlParam = currentUrl.searchParams.get('a');
+                
+                // Construir URL de redirecionamento final
+                const redirectUrl = baseUrl + '?a=' + urlParam + '&process=1';
+                
                 // Inicia o redirecionamento após 3 segundos
                 setTimeout(() => {
-                    window.location.href = window.location.href + '&process=1';
+                    window.location.href = redirectUrl;
                 }, 3000);
                 
                 // Contador visual
@@ -773,7 +781,7 @@ app.get('/aguarde', async (req, res) => {
                     if (seconds > 0) {
                         statusText.innerHTML = \`Redirecionando em \${seconds}s<span class="dots"></span>\`;
                     } else {
-                        statusText.innerHTML = 'Carregando<span class="dots"></span>';
+                        statusText.innerHTML = 'Processando<span class="dots"></span>';
                         clearInterval(countdown);
                     }
                 }, 1000);
