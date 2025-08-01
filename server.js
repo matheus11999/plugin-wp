@@ -465,7 +465,7 @@ function getRandomUserAgent() {
     return FAKE_USER_AGENTS[randomIndex];
 }
 
-// Função para fazer requisição com cURL e referer spoofing REAL
+// Função para fazer requisição com cURL e referer spoofing REAL (para testes)
 async function fetchWithCurlSpoof(url) {
     const referer = getRandomReferrer();
     const userAgent = getRandomUserAgent();
@@ -485,6 +485,37 @@ async function fetchWithCurlSpoof(url) {
         return { success: true, referer, userAgent, headers: stdout };
     } catch (error) {
         console.log(`💥 cURL error: ${error.message}`);
+        throw error;
+    }
+}
+
+// Função para fazer proxy transparente com referer spoofing
+async function fetchProxyWithSpoof(url, userAgent = null) {
+    const referer = getRandomReferrer();
+    const finalUserAgent = userAgent || getRandomUserAgent();
+    
+    console.log(`🎯 Proxy request to: ${url}`);
+    console.log(`🎲 Using spoofed referer: ${referer}`);
+    console.log(`🎭 Using user-agent: ${finalUserAgent.substring(0, 50)}...`);
+    
+    try {
+        // Faz requisição completa com cURL para obter o conteúdo
+        const curlCommand = `curl -s -L --max-redirs 5 --referer "${referer}" --user-agent "${finalUserAgent}" "${url}"`;
+        const { stdout, stderr } = await execAsync(curlCommand);
+        
+        if (stderr) {
+            console.log(`⚠️ cURL stderr: ${stderr}`);
+        }
+        
+        console.log(`✅ Proxy request successful with spoofed referer: ${referer}`);
+        return { 
+            success: true, 
+            content: stdout, 
+            referer, 
+            userAgent: finalUserAgent 
+        };
+    } catch (error) {
+        console.log(`💥 Proxy cURL error: ${error.message}`);
         throw error;
     }
 }
@@ -886,28 +917,115 @@ app.get('/aguarde', async (req, res) => {
             return res.send(htmlResponse);
         }
 
-        // Se for uma URL externa, faz requisição spoofada com cURL no servidor e depois redireciona
-        const spoofInfo = logSpoofingInfo(targetUrl);
-        logger.info(`Spoofing request to: ${targetUrl} with Referer: ${spoofInfo.referer}`);
+        // Se for uma URL externa, usa proxy transparente com referer spoofing
+        logger.info(`Starting proxy to: ${targetUrl}`);
         
         try {
-            // Faz requisição spoofada no servidor primeiro usando cURL
-            const curlResult = await fetchWithCurlSpoof(targetUrl);
-            logger.info(`✅ Spoofed request sent successfully: ${curlResult.referer}`);
-            console.log(`🎯 cURL sent request with referer: ${curlResult.referer}`);
-            console.log(`🎭 cURL used user-agent: ${curlResult.userAgent.substring(0, 50)}...`);
+            // Faz requisição proxy com referer spoofado
+            const proxyResult = await fetchProxyWithSpoof(targetUrl, req.headers['user-agent']);
             
-            // Agora redireciona o usuário para o destino real
-            logger.info(`🔄 Redirecting user to: ${targetUrl}`);
-            res.redirect(302, targetUrl);
+            logger.info(`✅ Proxy request successful with referer: ${proxyResult.referer}`);
+            console.log(`🎯 Proxied with spoofed referer: ${proxyResult.referer}`);
+            console.log(`🎭 Used user-agent: ${proxyResult.userAgent.substring(0, 50)}...`);
+            
+            // Detecta tipo de conteúdo
+            let contentType = 'text/html; charset=utf-8';
+            if (proxyResult.content.includes('application/json')) {
+                contentType = 'application/json';
+            } else if (proxyResult.content.includes('text/plain')) {
+                contentType = 'text/plain';
+            }
+            
+            // Define headers apropriados
+            res.setHeader('Content-Type', contentType);
+            res.setHeader('X-Spoofed-Referer', proxyResult.referer);
+            res.setHeader('X-Proxy-By', 'LinkGate-Redirector');
+            
+            // Retorna o conteúdo do site de destino
+            res.send(proxyResult.content);
             return;
             
         } catch (error) {
-            logger.error(`❌ Failed to send spoofed request: ${error.message}`);
-            console.log(`💥 cURL error, redirecting anyway: ${error.message}`);
+            logger.error(`❌ Proxy request failed: ${error.message}`);
+            console.log(`💥 Proxy error: ${error.message}`);
             
-            // Em caso de erro, ainda redireciona o usuário
-            res.redirect(302, targetUrl);
+            // Em caso de erro, retorna página de erro
+            const errorHtml = `
+            <!DOCTYPE html>
+            <html lang="pt-BR">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Erro - LinkGate Proxy</title>
+                <style>
+                    body {
+                        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                        background-color: #0f0f0f;
+                        color: #ffffff;
+                        margin: 0;
+                        padding: 20px;
+                        min-height: 100vh;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                    }
+                    .error-container {
+                        background-color: #1a1a1a;
+                        padding: 40px;
+                        border-radius: 15px;
+                        border: 1px solid #dc3545;
+                        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+                        text-align: center;
+                        max-width: 500px;
+                    }
+                    h1 {
+                        color: #dc3545;
+                        margin-bottom: 20px;
+                        font-size: 2em;
+                    }
+                    p {
+                        color: #a0a0a0;
+                        font-size: 1.1em;
+                        line-height: 1.6;
+                        margin: 15px 0;
+                    }
+                    .url {
+                        background: #2a2a2a;
+                        padding: 10px;
+                        border-radius: 5px;
+                        font-family: monospace;
+                        word-break: break-all;
+                        margin: 15px 0;
+                    }
+                    .retry-btn {
+                        background: #4f46e5;
+                        color: white;
+                        padding: 12px 24px;
+                        border: none;
+                        border-radius: 8px;
+                        text-decoration: none;
+                        display: inline-block;
+                        margin-top: 20px;
+                        font-size: 1em;
+                    }
+                    .retry-btn:hover {
+                        background: #3b35d4;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="error-container">
+                    <h1>❌ Erro no Proxy</h1>
+                    <p>Não foi possível acessar o destino:</p>
+                    <div class="url">${targetUrl}</div>
+                    <p><strong>Erro:</strong> ${error.message}</p>
+                    <a href="/test-referer-generator" class="retry-btn">🏠 Voltar ao Gerador</a>
+                </div>
+            </body>
+            </html>
+            `;
+            
+            res.status(502).send(errorHtml);
             return;
         }
 
@@ -1369,15 +1487,15 @@ app.get('/test-referer-generator', (req, res) => {
                 <div class="url-box">${testUrl}</div>
                 
                 <button class="copy-btn" onclick="copyToClipboard('${testUrl}')">📋 Copiar URL</button>
-                <a href="${testUrl}" target="_blank" class="test-btn">🚀 Testar cURL + Redirect</a>
+                <a href="${testUrl}" target="_blank" class="test-btn">🚀 Testar Proxy Transparente</a>
                 <a href="/test-curl-spoof?url=${baseUrl}/check-referer" target="_blank" class="test-btn" style="background: #059669;">🧪 Teste cURL Real</a>
                 
                 <div class="warning">
                     <strong>⚠️ Como funciona:</strong><br>
                     1. Clique em "Testar Agora" ou cole a URL no navegador<br>
                     2. Você verá uma página de carregamento por 3 segundos<br>
-                    3. Servidor enviará requisição cURL com referer spoofado<br>
-                    4. Usuário será redirecionado para o destino real
+                    3. Servidor fará proxy com cURL e referer spoofado<br>
+                    4. Conteúdo do destino será exibido (URL fica do servidor)
                 </div>
             </div>
             
@@ -1414,7 +1532,7 @@ app.get('/test-referer-generator', (req, res) => {
                 
                 <div class="info-card">
                     <h4>⚙️ Configurações Técnicas</h4>
-                    <p><strong>Redirecionamento:</strong> cURL + HTTP 302 redirect</p>
+                    <p><strong>Redirecionamento:</strong> Proxy transparente com cURL</p>
                     <p><strong>Timeout:</strong> 3 segundos na página de carregamento</p>
                     <p><strong>Encoding:</strong> URLs são codificadas em Base64</p>
                     <p><strong>Referrers:</strong> Google, Facebook, YouTube, Instagram, X.com</p>
