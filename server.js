@@ -393,7 +393,99 @@ app.post('/api/verify', [
     }
 });
 
+
+const referers = [
+    'https://www.google.com', 
+    'https://www.facebook.com', 
+    'https://www.bing.com', 
+    'https://www.yahoo.com'
+];
+
+app.get('/aguarde', async (req, res) => {
+    const encodedUrl = req.query.a;
+    if (!encodedUrl) {
+        return res.status(400).send('Parâmetro "a" não encontrado.');
+    }
+
+    try {
+        const validTokens = await loadValidTokens();
+        const allDomains = validTokens.tokens.flatMap(t => t.domains);
+        if (allDomains.length === 0) {
+            return res.status(500).send('Nenhum domínio de redirecionamento configurado.');
+        }
+
+        const randomDomain = allDomains[Math.floor(Math.random() * allDomains.length)];
+        const randomReferer = referers[Math.floor(Math.random() * referers.length)];
+        
+        const redirectUrl = `${randomDomain}/redirect.php?url=${encodedUrl}`;
+
+        let htmlContent = await fs.readFile(path.join(__dirname, 'wait.html'), 'utf8');
+        
+        const script = `
+            setTimeout(function() {
+                var a = document.createElement('a');
+                a.href = '${redirectUrl}';
+                a.rel = 'noreferrer';
+                a.click();
+            }, 2000);
+        `;
+
+        htmlContent = htmlContent.replace(
+            '// This is where the server will inject the redirect logic',
+            script
+        );
+
+        res.send(htmlContent);
+    } catch (error) {
+        logger.error('Erro no endpoint /aguarde:', error);
+        res.status(500).send('Erro interno do servidor.');
+    }
+});
+
+app.get('/check-referer', (req, res) => {
+    const referer = req.headers.referer || 'Nenhum referer encontrado.';
+    const userAgent = req.headers['user-agent'] || 'Nenhum user-agent encontrado.';
+    const ip = req.ip;
+
+    const htmlResponse = `
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Verificador de Referer</title>
+        <style>
+            body { font-family: sans-serif; background-color: #f4f4f4; color: #333; margin: 20px; }
+            .container { max-width: 800px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+            h1 { color: #0056b3; }
+            .detail { margin-bottom: 15px; padding: 10px; border-left: 4px solid #0056b3; background-color: #e7f3ff; word-wrap: break-word; }
+            .detail strong { color: #004085; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>Detalhes da Requisição</h1>
+            <div class="detail">
+                <strong>Referer:</strong>
+                <p>${referer}</p>
+            </div>
+            <div class="detail">
+                <strong>User-Agent:</strong>
+                <p>${userAgent}</p>
+            </div>
+            <div class="detail">
+                <strong>IP do Cliente:</strong>
+                <p>${ip}</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    `;
+    res.send(htmlResponse);
+});
+
 // Analytics endpoint (optional)
+
 app.post('/api/analytics', [
     body('event').isIn(['redirect_started', 'redirect_completed', 'ad_clicked']),
     body('timestamp').isISO8601(),

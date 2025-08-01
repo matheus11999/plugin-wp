@@ -3,12 +3,7 @@
     {
       "token": "demo12345678",
       "domains": [
-        "https://evoapi-wp.ttvjwi.easypanel.host",
-        "http://localhost",
-        "https://demo.linkgate.com",
-        "https://test.linkgate.com",
-        "https://wp.mikropix.online"
-      ],
+        "https://evoapi-wp.ttvjwi.easypanel.host"      ],
       "created": "2024-01-01T00:00:00Z",
       "expires": "2026-12-31T23:59:59Z",
       "description": "Demo token for testing and development"
