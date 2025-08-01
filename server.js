@@ -16,6 +16,9 @@ const crypto = require('crypto');
 const winston = require('winston');
 const axios = require('axios');
 const https = require('https');
+const { exec } = require('child_process');
+const { promisify } = require('util');
+const execAsync = promisify(exec);
 require('dotenv').config();
 
 // Initialize Express app
@@ -396,10 +399,124 @@ app.post('/api/verify', [
 });
 
 
+// Função para fazer requisição com cURL usando referer spoofing
+async function fetchWithCurl(url, referer = 'https://fakereferer.org', userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36') {
+    try {
+        const curlCommand = `curl -s -L --max-redirs 5 --referer "${referer}" --user-agent "${userAgent}" "${url}"`;
+        const { stdout, stderr } = await execAsync(curlCommand);
+        
+        if (stderr) {
+            console.log(`⚠️ cURL stderr: ${stderr}`);
+        }
+        
+        return stdout;
+    } catch (error) {
+        console.log(`💥 cURL error: ${error.message}`);
+        throw error;
+    }
+}
+
 app.get('/aguarde', async (req, res) => {
+    // Página de carregamento primeiro
+    const loadingHtml = `
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Aguarde...</title>
+        <style>
+            body {
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                margin: 0;
+                padding: 0;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                min-height: 100vh;
+                color: white;
+            }
+            .loading-container {
+                text-align: center;
+                background: rgba(255, 255, 255, 0.1);
+                padding: 40px;
+                border-radius: 20px;
+                backdrop-filter: blur(10px);
+                box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+                border: 1px solid rgba(255, 255, 255, 0.18);
+            }
+            .spinner {
+                width: 50px;
+                height: 50px;
+                border: 5px solid rgba(255, 255, 255, 0.3);
+                border-top: 5px solid white;
+                border-radius: 50%;
+                animation: spin 1s linear infinite;
+                margin: 0 auto 20px;
+            }
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+            h1 {
+                margin: 0 0 10px 0;
+                font-size: 2em;
+                font-weight: 300;
+            }
+            p {
+                margin: 0;
+                font-size: 1.1em;
+                opacity: 0.9;
+            }
+            .progress-bar {
+                width: 100%;
+                height: 4px;
+                background: rgba(255, 255, 255, 0.3);
+                border-radius: 2px;
+                margin-top: 20px;
+                overflow: hidden;
+            }
+            .progress {
+                height: 100%;
+                background: white;
+                width: 0%;
+                border-radius: 2px;
+                animation: progress 3s ease-in-out forwards;
+            }
+            @keyframes progress {
+                0% { width: 0%; }
+                100% { width: 100%; }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="loading-container">
+            <div class="spinner"></div>
+            <h1>Processando...</h1>
+            <p>Aguarde enquanto redirecionamos você para o destino</p>
+            <div class="progress-bar">
+                <div class="progress"></div>
+            </div>
+        </div>
+        <script>
+            setTimeout(() => {
+                window.location.href = window.location.href + '&process=1';
+            }, 3000);
+        </script>
+    </body>
+    </html>
+    `;
+
+    // Se não tem o parâmetro process, mostra a página de carregamento
+    if (!req.query.process) {
+        return res.send(loadingHtml);
+    }
+
+    // Agora processa a requisição
     const originalUrl = req.originalUrl;
     const indexOfQuery = originalUrl.indexOf('?a=');
-    const encodedUrl = indexOfQuery !== -1 ? decodeURIComponent(originalUrl.substring(indexOfQuery + 3)) : null;
+    const encodedUrl = indexOfQuery !== -1 ? decodeURIComponent(originalUrl.substring(indexOfQuery + 3).split('&')[0]) : null;
 
     if (!encodedUrl) {
         logger.warn('Access to /aguarde without "a" parameter.');
@@ -418,14 +535,14 @@ app.get('/aguarde', async (req, res) => {
     }
 
     try {
-        const referer = 'fakereferer.org';
+        const referer = 'https://fakereferer.org';
         const serverHost = (req.headers['x-forwarded-host'] || req.headers['host']);
         const target = new URL(targetUrl);
 
         // Se o destino for o próprio servidor, chame a função internamente
         if (target.hostname === serverHost && target.pathname === '/check-referer') {
             logger.info(`Internal handling for /check-referer with Referer: ${referer}`);
-            const userAgent = req.headers['user-agent'] || 'Nenhum user-agent encontrado.';
+            const userAgent = req.headers['user-agent'] || 'LinkGate/1.0 (Referer Spoofing Test)';
             const ip = req.ip;
             const htmlResponse = `
             <!DOCTYPE html>
@@ -433,29 +550,81 @@ app.get('/aguarde', async (req, res) => {
             <head>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Verificador de Referer</title>
+                <title>Verificador de Referer - Resultado</title>
                 <style>
-                    body { font-family: sans-serif; background-color: #f4f4f4; color: #333; margin: 20px; }
-                    .container { max-width: 800px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-                    h1 { color: #0056b3; }
-                    .detail { margin-bottom: 15px; padding: 10px; border-left: 4px solid #0056b3; background-color: #e7f3ff; word-wrap: break-word; }
-                    .detail strong { color: #004085; }
+                    body { 
+                        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        color: #333; 
+                        margin: 0;
+                        padding: 20px;
+                        min-height: 100vh;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                    }
+                    .container { 
+                        max-width: 800px; 
+                        background: white; 
+                        padding: 30px; 
+                        border-radius: 15px; 
+                        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+                    }
+                    h1 { 
+                        color: #0056b3; 
+                        text-align: center;
+                        margin-bottom: 30px;
+                        font-size: 2.2em;
+                    }
+                    .detail { 
+                        margin-bottom: 20px; 
+                        padding: 15px; 
+                        border-left: 4px solid #0056b3; 
+                        background-color: #e7f3ff; 
+                        word-wrap: break-word;
+                        border-radius: 5px;
+                    }
+                    .detail strong { 
+                        color: #004085; 
+                        display: block;
+                        margin-bottom: 8px;
+                        font-size: 1.1em;
+                    }
+                    .detail p {
+                        margin: 0;
+                        font-family: monospace;
+                        background: rgba(0,0,0,0.05);
+                        padding: 8px;
+                        border-radius: 3px;
+                        font-size: 0.95em;
+                    }
+                    .success {
+                        background-color: #d4edda;
+                        border-left-color: #28a745;
+                    }
+                    .success strong {
+                        color: #155724;
+                    }
                 </style>
             </head>
             <body>
                 <div class="container">
-                    <h1>Detalhes da Requisição</h1>
-                    <div class="detail">
-                        <strong>Referer:</strong>
+                    <h1>✅ Teste de Referer Spoofing</h1>
+                    <div class="detail success">
+                        <strong>🎯 Referer Spoofado com Sucesso:</strong>
                         <p>${referer}</p>
                     </div>
                     <div class="detail">
-                        <strong>User-Agent:</strong>
+                        <strong>🔍 User-Agent:</strong>
                         <p>${userAgent}</p>
                     </div>
                     <div class="detail">
-                        <strong>IP do Cliente:</strong>
+                        <strong>📍 IP do Cliente:</strong>
                         <p>${ip}</p>
+                    </div>
+                    <div class="detail">
+                        <strong>⏰ Timestamp:</strong>
+                        <p>${new Date().toISOString()}</p>
                     </div>
                 </div>
             </body>
@@ -464,41 +633,75 @@ app.get('/aguarde', async (req, res) => {
             return res.send(htmlResponse);
         }
 
-        // Se for uma URL externa, continue com o proxy
-        logger.info(`Proxying request to: ${targetUrl} with Referer: ${referer}`);
-
-        const httpsAgent = new https.Agent({
-            rejectUnauthorized: false // Ignore SSL certificate errors
-        });
-
-        const response = await axios.get(targetUrl, {
-            headers: {
-                'Referer': referer,
-                'User-Agent': req.headers['user-agent']
-            },
-            maxRedirects: 0,
-            validateStatus: () => true,
-            httpsAgent: httpsAgent
-        });
-
-        if (response.status >= 300 && response.status < 400 && response.headers.location) {
-            logger.info(`Target returned redirect ${response.status}. Passing redirect to client.`);
-            res.redirect(response.status, response.headers.location);
-        } else {
-            logger.info(`Target returned success ${response.status}. Passing content to client.`);
-            if(response.headers['content-type']) {
-                res.set('Content-Type', response.headers['content-type']);
-            }
-            res.status(response.status).send(response.data);
+        // Se for uma URL externa, usa cURL com referer spoofing
+        logger.info(`Fetching URL with cURL: ${targetUrl} with Referer: ${referer}`);
+        
+        const content = await fetchWithCurl(targetUrl, referer, req.headers['user-agent']);
+        
+        // Se o conteúdo parece ser HTML, retorna como HTML
+        if (content.includes('<html') || content.includes('<!DOCTYPE')) {
+            res.set('Content-Type', 'text/html; charset=utf-8');
         }
+        
+        logger.info(`Successfully fetched content from ${targetUrl} using cURL with spoofed referer`);
+        res.send(content);
 
     } catch (error) {
-        logger.error('Error proxying /aguarde:', { 
+        logger.error('Error in /aguarde endpoint:', { 
             message: error.message,
             code: error.code,
             url: targetUrl
         });
-        res.status(502).send('Error reaching the destination server.');
+        
+        const errorHtml = `
+        <!DOCTYPE html>
+        <html lang="pt-BR">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Erro - LinkGate</title>
+            <style>
+                body {
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+                    margin: 0;
+                    padding: 20px;
+                    min-height: 100vh;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+                .error-container {
+                    background: white;
+                    padding: 40px;
+                    border-radius: 15px;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+                    text-align: center;
+                    max-width: 500px;
+                }
+                h1 {
+                    color: #dc3545;
+                    margin-bottom: 20px;
+                    font-size: 2em;
+                }
+                p {
+                    color: #666;
+                    font-size: 1.1em;
+                    line-height: 1.6;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="error-container">
+                <h1>❌ Erro ao Processar</h1>
+                <p>Não foi possível acessar o servidor de destino.</p>
+                <p>Tente novamente em alguns instantes.</p>
+            </div>
+        </body>
+        </html>
+        `;
+        
+        res.status(502).send(errorHtml);
     }
 });
 
@@ -506,6 +709,9 @@ app.get('/check-referer', (req, res) => {
     const referer = req.headers.referer || 'Nenhum referer encontrado.';
     const userAgent = req.headers['user-agent'] || 'Nenhum user-agent encontrado.';
     const ip = req.ip;
+    const allHeaders = JSON.stringify(req.headers, null, 2);
+
+    logger.info(`📊 Check referer accessed - Referer: ${referer}, IP: ${ip}, UA: ${userAgent}`);
 
     const htmlResponse = `
     <!DOCTYPE html>
@@ -513,35 +719,506 @@ app.get('/check-referer', (req, res) => {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Verificador de Referer</title>
+        <title>🔍 Verificador de Referer - LinkGate</title>
         <style>
-            body { font-family: sans-serif; background-color: #f4f4f4; color: #333; margin: 20px; }
-            .container { max-width: 800px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-            h1 { color: #0056b3; }
-            .detail { margin-bottom: 15px; padding: 10px; border-left: 4px solid #0056b3; background-color: #e7f3ff; word-wrap: break-word; }
-            .detail strong { color: #004085; }
+            body { 
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: #333; 
+                margin: 0;
+                padding: 20px;
+                min-height: 100vh;
+            }
+            .header {
+                text-align: center;
+                color: white;
+                margin-bottom: 30px;
+            }
+            .header h1 {
+                font-size: 2.5em;
+                margin: 0;
+                text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            }
+            .header p {
+                font-size: 1.2em;
+                opacity: 0.9;
+                margin: 10px 0;
+            }
+            .container { 
+                max-width: 900px; 
+                margin: 0 auto;
+                background: white; 
+                padding: 30px; 
+                border-radius: 15px; 
+                box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            }
+            .detail { 
+                margin-bottom: 25px; 
+                padding: 20px; 
+                border-radius: 10px;
+                word-wrap: break-word;
+                transition: transform 0.2s ease;
+            }
+            .detail:hover {
+                transform: translateY(-2px);
+            }
+            .detail strong { 
+                display: block;
+                margin-bottom: 10px;
+                font-size: 1.2em;
+                color: #2c3e50;
+            }
+            .detail p, .detail pre {
+                margin: 0;
+                font-family: 'Courier New', monospace;
+                background: rgba(0,0,0,0.05);
+                padding: 12px;
+                border-radius: 5px;
+                font-size: 0.95em;
+                line-height: 1.4;
+                overflow-x: auto;
+            }
+            .referer {
+                background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+                border-left: 5px solid #28a745;
+            }
+            .referer strong {
+                color: #155724;
+            }
+            .user-agent {
+                background: linear-gradient(135deg, #e2e3e5 0%, #d6d8db 100%);
+                border-left: 5px solid #6c757d;
+            }
+            .user-agent strong {
+                color: #495057;
+            }
+            .ip {
+                background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+                border-left: 5px solid #ffc107;
+            }
+            .ip strong {
+                color: #856404;
+            }
+            .headers {
+                background: linear-gradient(135deg, #f8d7da 0%, #f1aeb5 100%);
+                border-left: 5px solid #dc3545;
+            }
+            .headers strong {
+                color: #721c24;
+            }
+            .timestamp {
+                background: linear-gradient(135deg, #d1ecf1 0%, #bee5eb 100%);
+                border-left: 5px solid #17a2b8;
+            }
+            .timestamp strong {
+                color: #0c5460;
+            }
+            .test-info {
+                background: linear-gradient(135deg, #e7f3ff 0%, #cce7ff 100%);
+                border-left: 5px solid #0056b3;
+                margin-bottom: 30px;
+                text-align: center;
+            }
+            .test-info strong {
+                color: #004085;
+            }
+            .footer {
+                text-align: center;
+                margin-top: 30px;
+                color: white;
+                font-size: 0.9em;
+            }
+            .copy-btn {
+                background: #007bff;
+                color: white;
+                border: none;
+                padding: 5px 10px;
+                border-radius: 3px;
+                cursor: pointer;
+                font-size: 0.8em;
+                margin-left: 10px;
+            }
+            .copy-btn:hover {
+                background: #0056b3;
+            }
         </style>
     </head>
     <body>
+        <div class="header">
+            <h1>🔍 Verificador de Referer</h1>
+            <p>LinkGate API Server - Teste de Spoofing</p>
+        </div>
+        
         <div class="container">
-            <h1>Detalhes da Requisição</h1>
-            <div class="detail">
-                <strong>Referer:</strong>
+            <div class="detail test-info">
+                <strong>ℹ️ Informações do Teste</strong>
+                <p>Este endpoint é usado para verificar se o referer spoofing está funcionando corretamente.</p>
+                <p>Acesse via: <code>/aguarde?a=[base64_encoded_url]</code></p>
+            </div>
+            
+            <div class="detail referer">
+                <strong>🎯 Referer Detectado:</strong>
                 <p>${referer}</p>
+                <button class="copy-btn" onclick="copyToClipboard('${referer}')">Copiar</button>
             </div>
-            <div class="detail">
-                <strong>User-Agent:</strong>
+            
+            <div class="detail user-agent">
+                <strong>🔍 User-Agent:</strong>
                 <p>${userAgent}</p>
+                <button class="copy-btn" onclick="copyToClipboard('${userAgent.replace(/'/g, "\\'")}')">Copiar</button>
             </div>
-            <div class="detail">
-                <strong>IP do Cliente:</strong>
+            
+            <div class="detail ip">
+                <strong>📍 IP do Cliente:</strong>
                 <p>${ip}</p>
+                <button class="copy-btn" onclick="copyToClipboard('${ip}')">Copiar</button>
+            </div>
+            
+            <div class="detail timestamp">
+                <strong>⏰ Timestamp:</strong>
+                <p>${new Date().toISOString()}</p>
+                <button class="copy-btn" onclick="copyToClipboard('${new Date().toISOString()}')">Copiar</button>
+            </div>
+            
+            <div class="detail headers">
+                <strong>📋 Todos os Headers HTTP:</strong>
+                <pre>${allHeaders}</pre>
+                <button class="copy-btn" onclick="copyToClipboard(\`${allHeaders.replace(/`/g, '\\`')}\`)">Copiar</button>
             </div>
         </div>
+        
+        <div class="footer">
+            <p>© 2025 LinkGate Redirector - Sistema de Teste de Referer Spoofing</p>
+            <p>Desenvolvido para verificação de integridade das requisições</p>
+        </div>
+        
+        <script>
+            function copyToClipboard(text) {
+                navigator.clipboard.writeText(text).then(function() {
+                    alert('Texto copiado para a área de transferência!');
+                }).catch(function(err) {
+                    console.error('Erro ao copiar texto: ', err);
+                });
+            }
+            
+            // Adiciona animação de entrada
+            document.addEventListener('DOMContentLoaded', function() {
+                const details = document.querySelectorAll('.detail');
+                details.forEach((detail, index) => {
+                    detail.style.opacity = '0';
+                    detail.style.transform = 'translateY(20px)';
+                    setTimeout(() => {
+                        detail.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+                        detail.style.opacity = '1';
+                        detail.style.transform = 'translateY(0)';
+                    }, index * 100);
+                });
+            });
+        </script>
     </body>
     </html>
     `;
     res.send(htmlResponse);
+});
+
+// Endpoint para gerar URL de teste para o referer spoofing
+app.get('/test-referer-generator', (req, res) => {
+    const serverHost = req.headers['x-forwarded-host'] || req.headers.host;
+    const protocol = req.headers['x-forwarded-proto'] || (req.connection.encrypted ? 'https' : 'http');
+    const baseUrl = `${protocol}://${serverHost}`;
+    
+    const checkRefererUrl = `${baseUrl}/check-referer`;
+    const encodedCheckRefererUrl = Buffer.from(checkRefererUrl).toString('base64');
+    const testUrl = `${baseUrl}/aguarde?a=${encodedCheckRefererUrl}`;
+    
+    const generatorHtml = `
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>🧪 Gerador de Teste - LinkGate</title>
+        <style>
+            body {
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                background: linear-gradient(135deg, #8B5CF6 0%, #3B82F6 100%);
+                margin: 0;
+                padding: 20px;
+                min-height: 100vh;
+                color: white;
+            }
+            .container {
+                max-width: 1000px;
+                margin: 0 auto;
+                background: rgba(255, 255, 255, 0.95);
+                padding: 40px;
+                border-radius: 20px;
+                box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+                color: #333;
+            }
+            h1 {
+                text-align: center;
+                color: #8B5CF6;
+                font-size: 2.5em;
+                margin-bottom: 10px;
+            }
+            .subtitle {
+                text-align: center;
+                color: #666;
+                font-size: 1.2em;
+                margin-bottom: 40px;
+            }
+            .section {
+                background: #f8f9fa;
+                padding: 25px;
+                border-radius: 12px;
+                margin-bottom: 25px;
+                border-left: 5px solid #8B5CF6;
+            }
+            .section h3 {
+                color: #8B5CF6;
+                margin-bottom: 15px;
+                font-size: 1.4em;
+            }
+            .url-box {
+                background: white;
+                padding: 15px;
+                border-radius: 8px;
+                border: 2px solid #e9ecef;
+                font-family: monospace;
+                font-size: 0.9em;
+                word-break: break-all;
+                margin: 10px 0;
+                position: relative;
+            }
+            .copy-btn {
+                background: #8B5CF6;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 0.9em;
+                margin: 10px 5px 0 0;
+                transition: background 0.3s ease;
+            }
+            .copy-btn:hover {
+                background: #7C3AED;
+            }
+            .test-btn {
+                background: #10B981;
+                color: white;
+                border: none;
+                padding: 12px 24px;
+                border-radius: 8px;
+                cursor: pointer;
+                font-size: 1em;
+                margin: 10px 5px 0 0;
+                text-decoration: none;
+                display: inline-block;
+                transition: background 0.3s ease;
+            }
+            .test-btn:hover {
+                background: #059669;
+            }
+            .warning {
+                background: #FEF3C7;
+                border: 1px solid #F59E0B;
+                border-radius: 8px;
+                padding: 15px;
+                margin: 20px 0;
+                color: #92400E;
+            }
+            .warning strong {
+                color: #D97706;
+            }
+            .custom-url {
+                width: 100%;
+                padding: 12px;
+                border: 2px solid #e9ecef;
+                border-radius: 8px;
+                font-size: 1em;
+                margin: 10px 0;
+            }
+            .custom-url:focus {
+                border-color: #8B5CF6;
+                outline: none;
+            }
+            .generate-btn {
+                background: #3B82F6;
+                color: white;
+                border: none;
+                padding: 12px 24px;
+                border-radius: 8px;
+                cursor: pointer;
+                font-size: 1em;
+                margin: 10px 0;
+                width: 100%;
+            }
+            .generate-btn:hover {
+                background: #2563EB;
+            }
+            .result {
+                display: none;
+                background: #ECFDF5;
+                border: 1px solid #10B981;
+                border-radius: 8px;
+                padding: 15px;
+                margin: 20px 0;
+                color: #065F46;
+            }
+            .info-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                gap: 20px;
+                margin-top: 30px;
+            }
+            .info-card {
+                background: white;
+                padding: 20px;
+                border-radius: 12px;
+                border: 1px solid #e9ecef;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            }
+            .info-card h4 {
+                color: #8B5CF6;
+                margin-bottom: 10px;
+                font-size: 1.2em;
+            }
+            .info-card p {
+                color: #666;
+                line-height: 1.6;
+                margin: 8px 0;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>🧪 Gerador de Teste de Referer Spoofing</h1>
+            <p class="subtitle">LinkGate API Server - Ferramenta de Teste e Validação</p>
+            
+            <div class="section">
+                <h3>🎯 Teste Automático (Recomendado)</h3>
+                <p>Este teste usa o endpoint /check-referer interno para verificar se o spoofing está funcionando:</p>
+                
+                <div class="url-box">${testUrl}</div>
+                
+                <button class="copy-btn" onclick="copyToClipboard('${testUrl}')">📋 Copiar URL</button>
+                <a href="${testUrl}" target="_blank" class="test-btn">🚀 Testar Agora</a>
+                
+                <div class="warning">
+                    <strong>⚠️ Como funciona:</strong><br>
+                    1. Clique em "Testar Agora" ou cole a URL no navegador<br>
+                    2. Você verá uma página de carregamento por 3 segundos<br>
+                    3. O sistema fará uma requisição com referer spoofado para "https://fakereferer.org"<br>
+                    4. A página de resultado mostrará todos os detalhes da requisição
+                </div>
+            </div>
+            
+            <div class="section">
+                <h3>🔧 Teste Personalizado</h3>
+                <p>Insira qualquer URL para testar o referer spoofing com sites externos:</p>
+                
+                <input type="url" id="customUrl" class="custom-url" placeholder="https://exemplo.com" value="">
+                <button class="generate-btn" onclick="generateCustomTest()">🔗 Gerar URL de Teste</button>
+                
+                <div id="customResult" class="result">
+                    <strong>✅ URL de teste gerada com sucesso!</strong><br>
+                    <div id="customTestUrl" class="url-box"></div>
+                    <button class="copy-btn" onclick="copyCustomUrl()">📋 Copiar</button>
+                    <button class="test-btn" onclick="testCustomUrl()">🚀 Testar</button>
+                </div>
+            </div>
+            
+            <div class="info-grid">
+                <div class="info-card">
+                    <h4>📊 Como Interpretar os Resultados</h4>
+                    <p><strong>Referer Spoofado:</strong> Se aparecer "https://fakereferer.org", o spoofing funcionou!</p>
+                    <p><strong>Headers HTTP:</strong> Verifique todos os cabeçalhos enviados na requisição.</p>
+                    <p><strong>User-Agent:</strong> Mostra o navegador/ferramenta que fez a requisição.</p>
+                </div>
+                
+                <div class="info-card">
+                    <h4>🔍 Endpoints Disponíveis</h4>
+                    <p><strong>/aguarde:</strong> Endpoint principal com referer spoofing</p>
+                    <p><strong>/check-referer:</strong> Página de teste para verificar headers</p>
+                    <p><strong>/health:</strong> Status do servidor API</p>
+                </div>
+                
+                <div class="info-card">
+                    <h4>⚙️ Configurações Técnicas</h4>
+                    <p><strong>Comando cURL:</strong> curl -s -L --referer "https://fakereferer.org"</p>
+                    <p><strong>Timeout:</strong> 3 segundos na página de carregamento</p>
+                    <p><strong>Encoding:</strong> URLs são codificadas em Base64</p>
+                </div>
+                
+                <div class="info-card">
+                    <h4>🎨 Recursos da Interface</h4>
+                    <p><strong>Página de Carregamento:</strong> Design moderno com animações</p>
+                    <p><strong>Responsive:</strong> Funciona em desktop e mobile</p>
+                    <p><strong>Logs Detalhados:</strong> Todas as requisições são logadas</p>
+                </div>
+            </div>
+        </div>
+        
+        <script>
+            let customTestUrl = '';
+            
+            function copyToClipboard(text) {
+                navigator.clipboard.writeText(text).then(function() {
+                    alert('✅ URL copiada para a área de transferência!');
+                }).catch(function(err) {
+                    console.error('❌ Erro ao copiar:', err);
+                    // Fallback para navegadores mais antigos
+                    const textArea = document.createElement('textarea');
+                    textArea.value = text;
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textArea);
+                    alert('✅ URL copiada!');
+                });
+            }
+            
+            function generateCustomTest() {
+                const customUrl = document.getElementById('customUrl').value;
+                if (!customUrl) {
+                    alert('⚠️ Por favor, insira uma URL válida!');
+                    return;
+                }
+                
+                try {
+                    new URL(customUrl); // Valida se é uma URL válida
+                    const encodedUrl = btoa(customUrl);
+                    customTestUrl = \`${baseUrl}/aguarde?a=\${encodedUrl}\`;
+                    
+                    document.getElementById('customTestUrl').textContent = customTestUrl;
+                    document.getElementById('customResult').style.display = 'block';
+                } catch (e) {
+                    alert('❌ URL inválida! Por favor, insira uma URL completa (ex: https://exemplo.com)');
+                }
+            }
+            
+            function copyCustomUrl() {
+                copyToClipboard(customTestUrl);
+            }
+            
+            function testCustomUrl() {
+                if (customTestUrl) {
+                    window.open(customTestUrl, '_blank');
+                }
+            }
+            
+            // Auto-focus no campo de URL personalizada
+            document.addEventListener('DOMContentLoaded', function() {
+                document.getElementById('customUrl').focus();
+            });
+        </script>
+    </body>
+    </html>
+    `;
+    
+    res.send(generatorHtml);
 });
 
 // Analytics endpoint (optional)
