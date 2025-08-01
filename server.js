@@ -15,6 +15,7 @@ const path = require('path');
 const crypto = require('crypto');
 const winston = require('winston');
 const axios = require('axios');
+const https = require('https');
 require('dotenv').config();
 
 // Initialize Express app
@@ -426,13 +427,18 @@ app.get('/aguarde', async (req, res) => {
 
         logger.info(`Redirecionando via proxy para: ${targetUrl} com Referer: ${randomReferer}`);
 
+        const httpsAgent = new https.Agent({
+            rejectUnauthorized: false // Ignora erros de certificado SSL
+        });
+
         const response = await axios.get(targetUrl, {
             headers: {
                 'Referer': randomReferer,
                 'User-Agent': req.headers['user-agent']
             },
             maxRedirects: 0,
-            validateStatus: () => true, // Aceita qualquer status para tratá-lo manualmente
+            validateStatus: () => true,
+            httpsAgent: httpsAgent
         });
 
         if (response.status >= 300 && response.status < 400 && response.headers.location) {
@@ -447,7 +453,11 @@ app.get('/aguarde', async (req, res) => {
         }
 
     } catch (error) {
-        logger.error('Erro no proxy de /aguarde:', error);
+        logger.error('Erro detalhado no proxy de /aguarde:', { 
+            message: error.message,
+            code: error.code,
+            url: error.config.url
+        });
         res.status(500).send('Erro interno do servidor ao processar o redirecionamento.');
     }
 });
