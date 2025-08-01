@@ -397,30 +397,35 @@ app.post('/api/verify', [
 
 
 app.get('/aguarde', async (req, res) => {
-    // Extrai a URL de forma robusta, mesmo que não esteja codificada
     const originalUrl = req.originalUrl;
     const indexOfQuery = originalUrl.indexOf('?a=');
-    const encodedUrl = indexOfQuery !== -1 ? originalUrl.substring(indexOfQuery + 3) : null;
+    // Use decodeURIComponent to handle any potential encoding of the query string itself
+    const encodedUrl = indexOfQuery !== -1 ? decodeURIComponent(originalUrl.substring(indexOfQuery + 3)) : null;
 
     if (!encodedUrl) {
-        logger.warn('Tentativa de acesso a /aguarde sem o parâmetro "a".');
-        return res.status(400).send('Parâmetro "a" não encontrado.');
+        logger.warn('Access to /aguarde without "a" parameter.');
+        return res.status(400).send('"a" parameter not found.');
+    }
+
+    let targetUrl;
+    try {
+        targetUrl = Buffer.from(encodedUrl, 'base64').toString('utf8');
+        // Validate if it's a proper URL
+        if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+            throw new Error('Invalid URL format. Must start with http:// or https://');
+        }
+    } catch (e) {
+        logger.warn(`Invalid Base64 or URL in "a" parameter: ${encodedUrl}`, { errorMessage: e.message });
+        return res.status(400).send('Invalid "a" parameter. Must be a valid Base64 encoded URL.');
     }
 
     try {
-        // Constrói o domínio de destino a partir dos headers da requisição original
-        const protocol = req.headers['x-forwarded-proto'] || 'https';
-        const host = req.headers['x-forwarded-host'] || req.headers['host'];
-        const domain = `${protocol}://${host}`;
-
         const referer = 'fakereferer.org';
         
-        const targetUrl = `${domain}/redirect.php?url=${encodedUrl}`;
-
-        logger.info(`Redirecionando via proxy para: ${targetUrl} com Referer: ${referer}`);
+        logger.info(`Proxying request to: ${targetUrl} with Referer: ${referer}`);
 
         const httpsAgent = new https.Agent({
-            rejectUnauthorized: false // Ignora erros de certificado SSL
+            rejectUnauthorized: false // Ignore SSL certificate errors
         });
 
         const response = await axios.get(targetUrl, {
@@ -434,23 +439,24 @@ app.get('/aguarde', async (req, res) => {
         });
 
         if (response.status >= 300 && response.status < 400 && response.headers.location) {
-            logger.info(`Destino retornou redirect ${response.status}. Repassando para o cliente.`);
+            logger.info(`Target returned redirect ${response.status}. Passing redirect to client.`);
             res.redirect(response.status, response.headers.location);
-        } else if (response.status >= 200 && response.status < 300) {
-            logger.info(`Destino retornou sucesso ${response.status}. Repassando conteúdo.`);
-            res.status(response.status).send(response.data);
         } else {
-            logger.error(`O servidor de destino (${domain}) retornou um erro: ${response.status} - ${response.statusText}`);
-            res.status(502).send('O servidor de destino não pôde ser alcançado ou retornou um erro.');
+            logger.info(`Target returned success ${response.status}. Passing content to client.`);
+            // Pass back relevant headers and content
+            if(response.headers['content-type']) {
+                res.set('Content-Type', response.headers['content-type']);
+            }
+            res.status(response.status).send(response.data);
         }
 
     } catch (error) {
-        logger.error('Erro detalhado no proxy de /aguarde:', { 
+        logger.error('Error proxying /aguarde:', { 
             message: error.message,
             code: error.code,
-            url: error.config ? error.config.url : 'URL não disponível no erro'
+            url: targetUrl
         });
-        res.status(500).send('Erro interno do servidor ao processar o redirecionamento.');
+        res.status(502).send('Error reaching the destination server.');
     }
 });
 
