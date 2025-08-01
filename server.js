@@ -967,70 +967,66 @@ app.get('/aguarde', async (req, res) => {
                 const statusEl = document.getElementById('status');
                 const fallbackEl = document.getElementById('fallback');
                 
-                // Service Worker para interceptar requisições
-                const serviceWorkerCode = \`
-                    const SPOOFED_REFERER = '\${spoofedReferer}';
-                    const TARGET_URL = '\${targetUrl}';
-                    
-                    self.addEventListener('fetch', function(event) {
-                        // Intercepta apenas requisições para o destino
-                        if (event.request.url.includes(new URL(TARGET_URL).hostname)) {
-                            console.log('🎯 Intercepting request to:', event.request.url);
-                            
-                            // Clona a requisição e adiciona referer spoofado
-                            const modifiedRequest = new Request(event.request, {
-                                headers: new Headers({
-                                    ...Object.fromEntries(event.request.headers.entries()),
-                                    'Referer': SPOOFED_REFERER,
-                                    'Referrer': SPOOFED_REFERER
-                                })
-                            });
-                            
-                            event.respondWith(fetch(modifiedRequest));
-                        }
-                    });
-                    
-                    self.addEventListener('message', function(event) {
-                        if (event.data.action === 'redirect') {
-                            // Força redirecionamento via Service Worker
-                            event.ports[0].postMessage({success: true});
-                        }
-                    });
-                \`;
+                console.log('🎯 Iniciando spoofing para:', targetUrl);
+                console.log('🎭 Referer spoofado:', spoofedReferer);
                 
-                // Registra o Service Worker
+                // Registra o Service Worker do arquivo separado
                 if ('serviceWorker' in navigator) {
-                    const blob = new Blob([serviceWorkerCode], {type: 'application/javascript'});
-                    const swUrl = URL.createObjectURL(blob);
-                    
-                    navigator.serviceWorker.register(swUrl)
-                        .then(function(registration) {
-                            console.log('✅ Service Worker registrado:', registration);
-                            statusEl.textContent = 'Service Worker ativo - Preparando redirecionamento...';
-                            
-                            // Aguarda o SW estar ativo
-                            return navigator.serviceWorker.ready;
-                        })
-                        .then(function(registration) {
-                            console.log('🚀 Service Worker pronto');
-                            statusEl.textContent = 'Redirecionando com referer spoofado...';
-                            
-                            // Aguarda um pouco para garantir que o SW está interceptando
-                            setTimeout(function() {
-                                // Redireciona para o destino
-                                window.location.href = targetUrl;
-                            }, 1000);
-                        })
-                        .catch(function(error) {
-                            console.error('❌ Erro no Service Worker:', error);
-                            statusEl.textContent = 'Erro no Service Worker - usando fallback...';
+                    navigator.serviceWorker.register('/sw-referer-spoof.js', {
+                        scope: '/'
+                    })
+                    .then(function(registration) {
+                        console.log('✅ Service Worker registrado:', registration);
+                        statusEl.textContent = 'Service Worker registrado - Aguardando ativação...';
+                        
+                        // Aguarda o SW estar ativo
+                        return navigator.serviceWorker.ready;
+                    })
+                    .then(function(registration) {
+                        console.log('🚀 Service Worker pronto:', registration);
+                        statusEl.textContent = 'Configurando spoofing de referer...';
+                        
+                        // Envia configuração para o Service Worker
+                        const targetHostname = new URL(targetUrl).hostname;
+                        const channel = new MessageChannel();
+                        
+                        channel.port1.onmessage = function(event) {
+                            console.log('📨 Resposta do SW:', event.data);
+                            if (event.data.success) {
+                                statusEl.textContent = 'Redirecionando com referer spoofado...';
+                                
+                                // Aguarda um pouco para garantir configuração
+                                setTimeout(function() {
+                                    console.log('🔄 Redirecionando para:', targetUrl);
+                                    window.location.href = targetUrl;
+                                }, 500);
+                            }
+                        };
+                        
+                        // Envia configuração via MessageChannel
+                        if (registration.active) {
+                            registration.active.postMessage({
+                                action: 'setSpoofConfig',
+                                referer: spoofedReferer,
+                                hostname: targetHostname
+                            }, [channel.port2]);
+                        } else {
+                            console.error('❌ Service Worker não está ativo');
+                            statusEl.textContent = 'SW não ativo - usando fallback...';
                             fallbackEl.style.display = 'inline-block';
-                            
-                            // Fallback sem Service Worker
-                            setTimeout(function() {
-                                window.location.href = targetUrl;
-                            }, 2000);
-                        });
+                            setTimeout(() => window.location.href = targetUrl, 2000);
+                        }
+                    })
+                    .catch(function(error) {
+                        console.error('❌ Erro no Service Worker:', error);
+                        statusEl.textContent = 'Erro no Service Worker: ' + error.message;
+                        fallbackEl.style.display = 'inline-block';
+                        
+                        // Fallback sem Service Worker
+                        setTimeout(function() {
+                            window.location.href = targetUrl;
+                        }, 3000);
+                    });
                 } else {
                     console.log('❌ Service Worker não suportado');
                     statusEl.textContent = 'Service Worker não suportado - redirecionamento direto...';
@@ -1041,13 +1037,6 @@ app.get('/aguarde', async (req, res) => {
                         window.location.href = targetUrl;
                     }, 2000);
                 }
-                
-                // Cleanup do blob URL após uso
-                setTimeout(function() {
-                    if (window.swBlobUrl) {
-                        URL.revokeObjectURL(window.swBlobUrl);
-                    }
-                }, 5000);
             </script>
         </body>
         </html>
@@ -1629,6 +1618,13 @@ app.get('/test-referer-generator', (req, res) => {
     `;
     
     res.send(generatorHtml);
+});
+
+// Serve o Service Worker file
+app.get('/sw-referer-spoof.js', (req, res) => {
+    res.setHeader('Content-Type', 'application/javascript');
+    res.setHeader('Service-Worker-Allowed', '/');
+    res.sendFile(path.join(__dirname, 'sw-referer-spoof.js'));
 });
 
 // Analytics endpoint (optional)
