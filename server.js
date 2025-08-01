@@ -919,20 +919,19 @@ app.get('/aguarde', async (req, res) => {
         logger.info(`Starting proxy to: ${targetUrl}`);
         
         try {
-            // Faz requisição proxy com referer spoofado
+            // Faz requisição proxy com referer spoofado (apenas para registrar a visita)
             const proxyResult = await fetchProxyWithSpoof(targetUrl, req.headers['user-agent']);
             
             logger.info(`✅ Proxy request successful with referer: ${proxyResult.referer}`);
             console.log(`🎯 Proxied with spoofed referer: ${proxyResult.referer}`);
             console.log(`🎭 Used user-agent: ${proxyResult.userAgent.substring(0, 50)}...`);
             
-            // Verifica se deve fazer redirecionamento após proxy
+            // Sempre redireciona para domínio ativo após fazer o proxy
+            const activeDomain = getRandomActiveDomain();
+            const encodedUrl = Buffer.from(targetUrl).toString('base64');
+            const redirectUrl = `${activeDomain}/redirect.php?url=${encodedUrl}`;
+            
             if (CONFIG.REDIRECT_AFTER_PROXY) {
-                // Seleciona domínio ativo aleatório
-                const activeDomain = getRandomActiveDomain();
-                const encodedUrl = Buffer.from(targetUrl).toString('base64');
-                const redirectUrl = `${activeDomain}/redirect.php?url=${encodedUrl}`;
-                
                 logger.info(`🔄 Redirecting to active domain: ${redirectUrl}`);
                 console.log(`🎯 Selected active domain: ${activeDomain}`);
                 
@@ -940,19 +939,97 @@ app.get('/aguarde', async (req, res) => {
                 res.redirect(302, redirectUrl);
                 return;
             } else {
-                // Não faz redirecionamento, retorna apenas o conteúdo proxy
-                let contentType = 'text/html; charset=utf-8';
-                if (proxyResult.content.includes('application/json')) {
-                    contentType = 'application/json';
-                } else if (proxyResult.content.includes('text/plain')) {
-                    contentType = 'text/plain';
-                }
+                // Faz proxy mas não redireciona o usuário, retorna página de sucesso
+                logger.info(`✅ Proxy completed, not redirecting user (REDIRECT_AFTER_PROXY=false)`);
+                console.log(`🎯 Would redirect to: ${redirectUrl}, but REDIRECT_AFTER_PROXY=false`);
                 
-                res.setHeader('Content-Type', contentType);
-                res.setHeader('X-Spoofed-Referer', proxyResult.referer);
-                res.setHeader('X-Proxy-By', 'LinkGate-Redirector');
+                const successHtml = `
+                <!DOCTYPE html>
+                <html lang="pt-BR">
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+                    <title>Proxy Concluído</title>
+                    <style>
+                        body {
+                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                            background: #0f0f0f;
+                            color: #ffffff;
+                            min-height: 100vh;
+                            display: flex;
+                            justify-content: center;
+                            align-items: center;
+                            margin: 0;
+                            text-align: center;
+                        }
+                        .success-container {
+                            max-width: 500px;
+                            padding: 40px;
+                            background: rgba(255, 255, 255, 0.05);
+                            border-radius: 15px;
+                            border: 1px solid rgba(255, 255, 255, 0.1);
+                        }
+                        .success-icon {
+                            font-size: 4rem;
+                            margin-bottom: 20px;
+                        }
+                        h1 {
+                            font-size: 2rem;
+                            margin-bottom: 15px;
+                            color: #4CAF50;
+                        }
+                        p {
+                            color: #a0a0a0;
+                            margin-bottom: 15px;
+                            line-height: 1.6;
+                        }
+                        .detail {
+                            background: rgba(255, 255, 255, 0.05);
+                            padding: 15px;
+                            border-radius: 8px;
+                            margin: 10px 0;
+                            text-align: left;
+                        }
+                        .detail strong {
+                            color: #4CAF50;
+                        }
+                        code {
+                            background: rgba(0, 0, 0, 0.3);
+                            padding: 2px 6px;
+                            border-radius: 3px;
+                            font-family: monospace;
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="success-container">
+                        <div class="success-icon">✅</div>
+                        <h1>Proxy Concluído</h1>
+                        <p>A requisição foi processada com sucesso através do proxy com referer spoofado.</p>
+                        
+                        <div class="detail">
+                            <strong>🎯 URL Alvo:</strong><br>
+                            <code>${targetUrl}</code>
+                        </div>
+                        
+                        <div class="detail">
+                            <strong>🎭 Referer Spoofado:</strong><br>
+                            <code>${proxyResult.referer}</code>
+                        </div>
+                        
+                        <div class="detail">
+                            <strong>⚙️ Status:</strong><br>
+                            REDIRECT_AFTER_PROXY está desabilitado - usuário não foi redirecionado
+                        </div>
+                        
+                        <p><small>Sistema LinkGate - Proxy transparente com referer spoofing</small></p>
+                    </div>
+                </body>
+                </html>
+                `;
                 
-                res.send(proxyResult.content);
+                res.send(successHtml);
                 return;
             }
             
