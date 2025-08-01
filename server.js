@@ -394,50 +394,29 @@ app.post('/api/verify', [
 });
 
 
-// Lista de referrers para spoofing aleatório
+// Lista de referrers para spoofing aleatório (top 5 geradores de tráfego)
 const FAKE_REFERRERS = [
-    // Google
+    // Google (maior gerador de tráfego)
     'https://www.google.com/search?q=',
     'https://www.google.com.br/search?q=',
-    'https://www.google.co.uk/search?q=',
     'https://images.google.com/',
-    'https://news.google.com/',
     
-    // Bing
-    'https://www.bing.com/search?q=',
-    'https://www.bing.com/images/search?q=',
-    'https://www.bing.com/news/',
-    
-    // DuckDuckGo
-    'https://duckduckgo.com/?q=',
-    'https://duckduckgo.com/?ia=images&q=',
-    
-    // Facebook
+    // Facebook (segundo maior)
     'https://www.facebook.com/',
     'https://m.facebook.com/',
-    'https://web.facebook.com/',
     'https://www.facebook.com/l.php?u=',
     
-    // Instagram
+    // YouTube (terceiro maior)
+    'https://www.youtube.com/',
+    'https://m.youtube.com/',
+    
+    // Instagram (quarto maior)
     'https://www.instagram.com/',
     'https://www.instagram.com/explore/',
-    'https://www.instagram.com/p/',
     
-    // X (Twitter)
+    // X/Twitter (quinto maior)
     'https://x.com/',
-    'https://x.com/search?q=',
-    'https://x.com/home',
-    'https://t.co/',
-    
-    // Outros populares
-    'https://www.youtube.com/',
-    'https://www.reddit.com/',
-    'https://www.pinterest.com/',
-    'https://www.linkedin.com/',
-    'https://www.tiktok.com/',
-    'https://www.wikipedia.org/',
-    'https://github.com/',
-    'https://stackoverflow.com/'
+    'https://t.co/'
 ];
 
 // Função para obter um referrer aleatório
@@ -459,33 +438,22 @@ function getRandomReferrer() {
     return baseReferrer;
 }
 
-// Lista de User-Agents realistas
+// Lista de User-Agents mais comuns
 const FAKE_USER_AGENTS = [
-    // Chrome Windows
+    // Chrome Windows (mais comum)
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
     
     // Chrome Mac
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     
     // Firefox Windows
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0',
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:119.0) Gecko/20100101 Firefox/119.0',
-    
-    // Firefox Mac
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:120.0) Gecko/20100101 Firefox/120.0',
     
     // Safari Mac
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15',
     
-    // Edge Windows
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0',
-    
     // Mobile Chrome
-    'Mozilla/5.0 (Linux; Android 10; SM-G975F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
-    
-    // Mobile Safari
-    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Mobile/15E148 Safari/604.1'
+    'Mozilla/5.0 (Linux; Android 10; SM-G975F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36'
 ];
 
 // Função para obter um User-Agent aleatório
@@ -891,12 +859,133 @@ app.get('/aguarde', async (req, res) => {
             return res.send(htmlResponse);
         }
 
-        // Se for uma URL externa, redireciona para ela
+        // Se for uma URL externa, usa meta refresh com referer spoofing
         const spoofInfo = logSpoofingInfo(targetUrl);
-        logger.info(`Redirecting to: ${targetUrl} with Random Referer logged: ${spoofInfo.referer}`);
+        logger.info(`Meta refresh redirect to: ${targetUrl} with Referer: ${spoofInfo.referer}`);
         
-        // Faz redirecionamento HTTP 302 para o site de destino
-        res.redirect(302, targetUrl);
+        // Página intermediária com meta refresh e referer spoofing
+        const redirectHtml = `
+        <!DOCTYPE html>
+        <html lang="pt-BR">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <meta name="referrer" content="no-referrer">
+            <meta http-equiv="refresh" content="0;url=${targetUrl}">
+            <title>Redirecionando...</title>
+            <style>
+                * {
+                    margin: 0;
+                    padding: 0;
+                    box-sizing: border-box;
+                }
+                
+                body {
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    background-color: #0f0f0f;
+                    color: #ffffff;
+                    min-height: 100vh;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    padding: 20px;
+                }
+                
+                .redirect-container {
+                    text-align: center;
+                    background-color: #1a1a1a;
+                    padding: 40px 30px;
+                    border-radius: 16px;
+                    border: 1px solid #2a2a2a;
+                    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+                    max-width: 420px;
+                    width: 100%;
+                }
+                
+                .spinner {
+                    width: 40px;
+                    height: 40px;
+                    border: 3px solid #2a2a2a;
+                    border-top: 3px solid #4f46e5;
+                    border-radius: 50%;
+                    animation: spin 1s linear infinite;
+                    margin: 0 auto 20px;
+                }
+                
+                @keyframes spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                }
+                
+                h1 {
+                    font-size: 1.5rem;
+                    font-weight: 600;
+                    color: #ffffff;
+                    margin-bottom: 15px;
+                }
+                
+                p {
+                    font-size: 0.9rem;
+                    color: #a0a0a0;
+                    line-height: 1.4;
+                }
+                
+                .fallback-link {
+                    display: inline-block;
+                    margin-top: 20px;
+                    padding: 10px 20px;
+                    background-color: #4f46e5;
+                    color: white;
+                    text-decoration: none;
+                    border-radius: 8px;
+                    font-size: 0.9rem;
+                    transition: background-color 0.3s ease;
+                }
+                
+                .fallback-link:hover {
+                    background-color: #3b35d4;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="redirect-container">
+                <div class="spinner"></div>
+                <h1>Redirecionando...</h1>
+                <p>Se não for redirecionado automaticamente:</p>
+                <a href="${targetUrl}" class="fallback-link" rel="noreferrer">Clique aqui</a>
+            </div>
+            
+            <script>
+                // Define o referrer via JavaScript antes do redirecionamento
+                if (document.referrer !== '${spoofInfo.referer}') {
+                    try {
+                        // Tenta definir via Object.defineProperty (alguns navegadores)
+                        Object.defineProperty(document, 'referrer', {
+                            value: '${spoofInfo.referer}',
+                            writable: false
+                        });
+                    } catch(e) {
+                        console.log('Referrer spoofing via JS not supported');
+                    }
+                }
+                
+                // Fallback para garantir o redirecionamento
+                setTimeout(function() {
+                    // Cria um link temporário com rel="noreferrer" 
+                    const link = document.createElement('a');
+                    link.href = '${targetUrl}';
+                    link.rel = 'noreferrer';
+                    link.target = '_self';
+                    link.style.display = 'none';
+                    document.body.appendChild(link);
+                    link.click();
+                }, 100);
+            </script>
+        </body>
+        </html>
+        `;
+        
+        res.send(redirectHtml);
 
     } catch (error) {
         logger.error('Error in /aguarde endpoint:', { 
@@ -1362,8 +1451,8 @@ app.get('/test-referer-generator', (req, res) => {
                     <strong>⚠️ Como funciona:</strong><br>
                     1. Clique em "Testar Agora" ou cole a URL no navegador<br>
                     2. Você verá uma página de carregamento por 3 segundos<br>
-                    3. O sistema redirecionará para o destino (URL permanecerá do site alvo)<br>
-                    4. Para teste interno: use /check-referer para ver detalhes do spoofing
+                    3. Meta refresh redirecionará para o destino com referer spoofado<br>
+                    4. Para teste interno: use /check-referer para verificar o referer real
                 </div>
             </div>
             
@@ -1399,10 +1488,10 @@ app.get('/test-referer-generator', (req, res) => {
                 
                 <div class="info-card">
                     <h4>⚙️ Configurações Técnicas</h4>
-                    <p><strong>Redirecionamento:</strong> HTTP 302 para o site de destino</p>
+                    <p><strong>Redirecionamento:</strong> Meta refresh com referer spoofing</p>
                     <p><strong>Timeout:</strong> 3 segundos na página de carregamento</p>
                     <p><strong>Encoding:</strong> URLs são codificadas em Base64</p>
-                    <p><strong>Referrers:</strong> Google, Bing, Facebook, Instagram, X.com, etc.</p>
+                    <p><strong>Referrers:</strong> Google, Facebook, YouTube, Instagram, X.com</p>
                 </div>
                 
                 <div class="info-card">
