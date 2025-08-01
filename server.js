@@ -456,7 +456,7 @@ app.get('/aguarde', async (req, res) => {
         logger.error('Erro detalhado no proxy de /aguarde:', { 
             message: error.message,
             code: error.code,
-            url: error.config.url
+            url: error.config ? error.config.url : 'URL não disponível no erro'
         });
         res.status(500).send('Erro interno do servidor ao processar o redirecionamento.');
     }
