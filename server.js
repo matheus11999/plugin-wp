@@ -14,11 +14,6 @@ const fs = require('fs').promises;
 const path = require('path');
 const crypto = require('crypto');
 const winston = require('winston');
-const axios = require('axios');
-const https = require('https');
-const { exec } = require('child_process');
-const { promisify } = require('util');
-const execAsync = promisify(exec);
 require('dotenv').config();
 
 // Initialize Express app
@@ -399,21 +394,115 @@ app.post('/api/verify', [
 });
 
 
-// Função para fazer requisição com cURL usando referer spoofing
-async function fetchWithCurl(url, referer = 'https://fakereferer.org', userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36') {
-    try {
-        const curlCommand = `curl -s -L --max-redirs 5 --referer "${referer}" --user-agent "${userAgent}" "${url}"`;
-        const { stdout, stderr } = await execAsync(curlCommand);
-        
-        if (stderr) {
-            console.log(`⚠️ cURL stderr: ${stderr}`);
-        }
-        
-        return stdout;
-    } catch (error) {
-        console.log(`💥 cURL error: ${error.message}`);
-        throw error;
+// Lista de referrers para spoofing aleatório
+const FAKE_REFERRERS = [
+    // Google
+    'https://www.google.com/search?q=',
+    'https://www.google.com.br/search?q=',
+    'https://www.google.co.uk/search?q=',
+    'https://images.google.com/',
+    'https://news.google.com/',
+    
+    // Bing
+    'https://www.bing.com/search?q=',
+    'https://www.bing.com/images/search?q=',
+    'https://www.bing.com/news/',
+    
+    // DuckDuckGo
+    'https://duckduckgo.com/?q=',
+    'https://duckduckgo.com/?ia=images&q=',
+    
+    // Facebook
+    'https://www.facebook.com/',
+    'https://m.facebook.com/',
+    'https://web.facebook.com/',
+    'https://www.facebook.com/l.php?u=',
+    
+    // Instagram
+    'https://www.instagram.com/',
+    'https://www.instagram.com/explore/',
+    'https://www.instagram.com/p/',
+    
+    // X (Twitter)
+    'https://x.com/',
+    'https://x.com/search?q=',
+    'https://x.com/home',
+    'https://t.co/',
+    
+    // Outros populares
+    'https://www.youtube.com/',
+    'https://www.reddit.com/',
+    'https://www.pinterest.com/',
+    'https://www.linkedin.com/',
+    'https://www.tiktok.com/',
+    'https://www.wikipedia.org/',
+    'https://github.com/',
+    'https://stackoverflow.com/'
+];
+
+// Função para obter um referrer aleatório
+function getRandomReferrer() {
+    const randomIndex = Math.floor(Math.random() * FAKE_REFERRERS.length);
+    const baseReferrer = FAKE_REFERRERS[randomIndex];
+    
+    // Se for um referrer de busca, adiciona um termo aleatório
+    if (baseReferrer.includes('?q=') && baseReferrer.endsWith('?q=')) {
+        const searchTerms = [
+            'technology news', 'best practices', 'tutorial guide', 'how to learn',
+            'latest updates', 'programming tips', 'web development', 'digital marketing',
+            'online tools', 'productivity apps', 'social media trends', 'tech reviews'
+        ];
+        const randomTerm = searchTerms[Math.floor(Math.random() * searchTerms.length)];
+        return baseReferrer + encodeURIComponent(randomTerm);
     }
+    
+    return baseReferrer;
+}
+
+// Lista de User-Agents realistas
+const FAKE_USER_AGENTS = [
+    // Chrome Windows
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+    
+    // Chrome Mac
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    
+    // Firefox Windows
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:119.0) Gecko/20100101 Firefox/119.0',
+    
+    // Firefox Mac
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:120.0) Gecko/20100101 Firefox/120.0',
+    
+    // Safari Mac
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15',
+    
+    // Edge Windows
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0',
+    
+    // Mobile Chrome
+    'Mozilla/5.0 (Linux; Android 10; SM-G975F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+    
+    // Mobile Safari
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Mobile/15E148 Safari/604.1'
+];
+
+// Função para obter um User-Agent aleatório
+function getRandomUserAgent() {
+    const randomIndex = Math.floor(Math.random() * FAKE_USER_AGENTS.length);
+    return FAKE_USER_AGENTS[randomIndex];
+}
+
+// Função para fazer log do referer que seria usado (apenas para debug)
+function logSpoofingInfo(url) {
+    const referer = getRandomReferrer();
+    const userAgent = getRandomUserAgent();
+    
+    console.log(`🎲 Would use random referer: ${referer}`);
+    console.log(`🎭 Would use random user-agent: ${userAgent.substring(0, 50)}...`);
+    
+    return { referer, userAgent };
 }
 
 app.get('/aguarde', async (req, res) => {
@@ -535,14 +624,14 @@ app.get('/aguarde', async (req, res) => {
     }
 
     try {
-        const referer = 'https://fakereferer.org';
         const serverHost = (req.headers['x-forwarded-host'] || req.headers['host']);
         const target = new URL(targetUrl);
 
-        // Se o destino for o próprio servidor, chame a função internamente
+        // Se o destino for o próprio servidor (teste interno)
         if (target.hostname === serverHost && target.pathname === '/check-referer') {
-            logger.info(`Internal handling for /check-referer with Referer: ${referer}`);
-            const userAgent = req.headers['user-agent'] || 'LinkGate/1.0 (Referer Spoofing Test)';
+            const spoofInfo = logSpoofingInfo(targetUrl);
+            logger.info(`Internal handling for /check-referer with Random Referer: ${spoofInfo.referer}`);
+            const userAgent = spoofInfo.userAgent;
             const ip = req.ip;
             const htmlResponse = `
             <!DOCTYPE html>
@@ -612,7 +701,7 @@ app.get('/aguarde', async (req, res) => {
                     <h1>✅ Teste de Referer Spoofing</h1>
                     <div class="detail success">
                         <strong>🎯 Referer Spoofado com Sucesso:</strong>
-                        <p>${referer}</p>
+                        <p>${spoofInfo.referer}</p>
                     </div>
                     <div class="detail">
                         <strong>🔍 User-Agent:</strong>
@@ -633,18 +722,12 @@ app.get('/aguarde', async (req, res) => {
             return res.send(htmlResponse);
         }
 
-        // Se for uma URL externa, usa cURL com referer spoofing
-        logger.info(`Fetching URL with cURL: ${targetUrl} with Referer: ${referer}`);
+        // Se for uma URL externa, redireciona para ela
+        const spoofInfo = logSpoofingInfo(targetUrl);
+        logger.info(`Redirecting to: ${targetUrl} with Random Referer logged: ${spoofInfo.referer}`);
         
-        const content = await fetchWithCurl(targetUrl, referer, req.headers['user-agent']);
-        
-        // Se o conteúdo parece ser HTML, retorna como HTML
-        if (content.includes('<html') || content.includes('<!DOCTYPE')) {
-            res.set('Content-Type', 'text/html; charset=utf-8');
-        }
-        
-        logger.info(`Successfully fetched content from ${targetUrl} using cURL with spoofed referer`);
-        res.send(content);
+        // Faz redirecionamento HTTP 302 para o site de destino
+        res.redirect(302, targetUrl);
 
     } catch (error) {
         logger.error('Error in /aguarde endpoint:', { 
@@ -1110,8 +1193,8 @@ app.get('/test-referer-generator', (req, res) => {
                     <strong>⚠️ Como funciona:</strong><br>
                     1. Clique em "Testar Agora" ou cole a URL no navegador<br>
                     2. Você verá uma página de carregamento por 3 segundos<br>
-                    3. O sistema fará uma requisição com referer spoofado para "https://fakereferer.org"<br>
-                    4. A página de resultado mostrará todos os detalhes da requisição
+                    3. O sistema redirecionará para o destino (URL permanecerá do site alvo)<br>
+                    4. Para teste interno: use /check-referer para ver detalhes do spoofing
                 </div>
             </div>
             
@@ -1147,9 +1230,10 @@ app.get('/test-referer-generator', (req, res) => {
                 
                 <div class="info-card">
                     <h4>⚙️ Configurações Técnicas</h4>
-                    <p><strong>Comando cURL:</strong> curl -s -L --referer "https://fakereferer.org"</p>
+                    <p><strong>Redirecionamento:</strong> HTTP 302 para o site de destino</p>
                     <p><strong>Timeout:</strong> 3 segundos na página de carregamento</p>
                     <p><strong>Encoding:</strong> URLs são codificadas em Base64</p>
+                    <p><strong>Referrers:</strong> Google, Bing, Facebook, Instagram, X.com, etc.</p>
                 </div>
                 
                 <div class="info-card">
@@ -1190,7 +1274,7 @@ app.get('/test-referer-generator', (req, res) => {
                 try {
                     new URL(customUrl); // Valida se é uma URL válida
                     const encodedUrl = btoa(customUrl);
-                    customTestUrl = \`${baseUrl}/aguarde?a=\${encodedUrl}\`;
+                    customTestUrl = '${baseUrl}/aguarde?a=' + encodedUrl;
                     
                     document.getElementById('customTestUrl').textContent = customTestUrl;
                     document.getElementById('customResult').style.display = 'block';
