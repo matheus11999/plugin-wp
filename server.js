@@ -426,22 +426,24 @@ app.get('/aguarde', async (req, res) => {
 
         logger.info(`Redirecionando via proxy para: ${targetUrl} com Referer: ${randomReferer}`);
 
-        // Faz a requisição do lado do servidor com o referer falso
         const response = await axios.get(targetUrl, {
             headers: {
                 'Referer': randomReferer,
-                'User-Agent': req.headers['user-agent'] // Repassa o User-Agent original
+                'User-Agent': req.headers['user-agent']
             },
-            maxRedirects: 0, // Não segue redirecionamentos automaticamente
-            validateStatus: status => status >= 200 && status < 400 // Aceita qualquer status de sucesso ou redirecionamento
+            maxRedirects: 0,
+            validateStatus: () => true, // Aceita qualquer status para tratá-lo manualmente
         });
 
-        // Se o destino responder com um redirecionamento, repassa para o cliente
         if (response.status >= 300 && response.status < 400 && response.headers.location) {
+            logger.info(`Destino retornou redirect ${response.status}. Repassando para o cliente.`);
             res.redirect(response.status, response.headers.location);
-        } else {
-            // Se não for um redirecionamento, apenas envia a resposta do destino
+        } else if (response.status >= 200 && response.status < 300) {
+            logger.info(`Destino retornou sucesso ${response.status}. Repassando conteúdo.`);
             res.status(response.status).send(response.data);
+        } else {
+            logger.error(`O servidor de destino (${randomDomain}) retornou um erro: ${response.status} - ${response.statusText}`);
+            res.status(502).send('O servidor de destino não pôde ser alcançado ou retornou um erro.');
         }
 
     } catch (error) {
