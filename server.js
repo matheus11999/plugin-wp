@@ -401,48 +401,60 @@ const referers = [
     'https://www.yahoo.com'
 ];
 
+const axios = require('axios');
+
+const referers = [
+    'https://www.google.com/',
+    'https://www.facebook.com/',
+    'https://www.bing.com/',
+    'https://www.yahoo.com/',
+    'https://www.duckduckgo.com/'
+];
+
 app.get('/aguarde', async (req, res) => {
     const encodedUrl = req.query.a;
-    const debugMode = req.query.debug === 'true';
 
     if (!encodedUrl) {
+        logger.warn('Tentativa de acesso a /aguarde sem o parâmetro "a".');
         return res.status(400).send('Parâmetro "a" não encontrado.');
     }
 
     try {
-        let redirectUrl;
-
-        if (debugMode) {
-            redirectUrl = '/check-referer';
-            logger.info(`Modo de depuração ativado. Redirecionando para ${redirectUrl}`);
-        } else {
-            const validTokens = await loadValidTokens();
-            const allDomains = validTokens.tokens.flatMap(t => t.domains);
-            if (allDomains.length === 0) {
-                logger.error('Nenhum domínio de redirecionamento configurado.');
-                return res.status(500).send('Nenhum domínio de redirecionamento configurado.');
-            }
-
-            const randomDomain = allDomains[Math.floor(Math.random() * allDomains.length)];
-            redirectUrl = `${randomDomain}/redirect.php?url=${encodedUrl}`;
+        const validTokens = await loadValidTokens();
+        const allDomains = validTokens.tokens.flatMap(t => t.domains);
+        if (allDomains.length === 0) {
+            logger.error('Nenhum domínio de redirecionamento configurado.');
+            return res.status(500).send('Nenhum domínio de redirecionamento configurado.');
         }
-        
-        let htmlContent = await fs.readFile(path.join(__dirname, 'wait.html'), 'utf8');
-        
-        const nonce = crypto.randomBytes(16).toString('base64');
-        const script = `<script nonce="${nonce}">
-            setTimeout(function() {
-                window.location.replace('${redirectUrl}');
-            }, 2000);
-        </script>`;
 
-        htmlContent = htmlContent.replace('<!-- SCRIPT_PLACEHOLDER -->', script);
+        const randomDomain = allDomains[Math.floor(Math.random() * allDomains.length)];
+        const randomReferer = referers[Math.floor(Math.random() * referers.length)];
+        
+        const targetUrl = `${randomDomain}/redirect.php?url=${encodedUrl}`;
 
-        res.setHeader('Content-Security-Policy', `script-src 'self' 'nonce-${nonce}'`);
-        res.send(htmlContent);
+        logger.info(`Redirecionando via proxy para: ${targetUrl} com Referer: ${randomReferer}`);
+
+        // Faz a requisição do lado do servidor com o referer falso
+        const response = await axios.get(targetUrl, {
+            headers: {
+                'Referer': randomReferer,
+                'User-Agent': req.headers['user-agent'] // Repassa o User-Agent original
+            },
+            maxRedirects: 0, // Não segue redirecionamentos automaticamente
+            validateStatus: status => status >= 200 && status < 400 // Aceita qualquer status de sucesso ou redirecionamento
+        });
+
+        // Se o destino responder com um redirecionamento, repassa para o cliente
+        if (response.status >= 300 && response.status < 400 && response.headers.location) {
+            res.redirect(response.status, response.headers.location);
+        } else {
+            // Se não for um redirecionamento, apenas envia a resposta do destino
+            res.status(response.status).send(response.data);
+        }
+
     } catch (error) {
-        logger.error('Erro no endpoint /aguarde:', error);
-        res.status(500).send('Erro interno do servidor.');
+        logger.error('Erro no proxy de /aguarde:', error);
+        res.status(500).send('Erro interno do servidor ao processar o redirecionamento.');
     }
 });
 
