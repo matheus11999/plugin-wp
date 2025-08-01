@@ -403,30 +403,38 @@ const referers = [
 
 app.get('/aguarde', async (req, res) => {
     const encodedUrl = req.query.a;
+    const debugMode = req.query.debug === 'true';
+
     if (!encodedUrl) {
         return res.status(400).send('Parâmetro "a" não encontrado.');
     }
 
     try {
-        const validTokens = await loadValidTokens();
-        const allDomains = validTokens.tokens.flatMap(t => t.domains);
-        if (allDomains.length === 0) {
-            return res.status(500).send('Nenhum domínio de redirecionamento configurado.');
+        let redirectUrl;
+
+        if (debugMode) {
+            // Em modo de depuração, redireciona para o verificador de referer.
+            redirectUrl = '/check-referer';
+            logger.info(`Modo de depuração ativado. Redirecionando para ${redirectUrl}`);
+        } else {
+            // Modo normal: seleciona um domínio aleatório e prepara o redirecionamento.
+            const validTokens = await loadValidTokens();
+            const allDomains = validTokens.tokens.flatMap(t => t.domains);
+            if (allDomains.length === 0) {
+                logger.error('Nenhum domínio de redirecionamento configurado.');
+                return res.status(500).send('Nenhum domínio de redirecionamento configurado.');
+            }
+
+            const randomDomain = allDomains[Math.floor(Math.random() * allDomains.length)];
+            redirectUrl = `${randomDomain}/redirect.php?url=${encodedUrl}`;
         }
-
-        const randomDomain = allDomains[Math.floor(Math.random() * allDomains.length)];
-        const randomReferer = referers[Math.floor(Math.random() * referers.length)];
         
-        const redirectUrl = `${randomDomain}/redirect.php?url=${encodedUrl}`;
-
         let htmlContent = await fs.readFile(path.join(__dirname, 'wait.html'), 'utf8');
         
+        // Usa window.location.replace para um redirecionamento mais robusto
         const script = `
             setTimeout(function() {
-                var a = document.createElement('a');
-                a.href = '${redirectUrl}';
-                a.rel = 'noreferrer';
-                a.click();
+                window.location.replace('${redirectUrl}');
             }, 2000);
         `;
 
