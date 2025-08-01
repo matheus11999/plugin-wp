@@ -404,7 +404,7 @@ const CONFIG = {
         'https://evoapi-wp.ttvjwi.easypanel.host'    ],
     
     // Se deve fazer redirecionamento após proxy (true/false)
-    REDIRECT_AFTER_PROXY: true,
+    REDIRECT_AFTER_PROXY: false,
     
     // Delay antes do redirecionamento (em ms)
     REDIRECT_DELAY: 3000
