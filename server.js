@@ -859,19 +859,17 @@ app.get('/aguarde', async (req, res) => {
             return res.send(htmlResponse);
         }
 
-        // Se for uma URL externa, usa meta refresh com referer spoofing
+        // Se for uma URL externa, usa Service Worker para referer spoofing
         const spoofInfo = logSpoofingInfo(targetUrl);
-        logger.info(`Meta refresh redirect to: ${targetUrl} with Referer: ${spoofInfo.referer}`);
+        logger.info(`Service Worker redirect to: ${targetUrl} with Referer: ${spoofInfo.referer}`);
         
-        // Página intermediária com meta refresh e referer spoofing
+        // Página com Service Worker para spoofing de referer
         const redirectHtml = `
         <!DOCTYPE html>
         <html lang="pt-BR">
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <meta name="referrer" content="no-referrer">
-            <meta http-equiv="refresh" content="0;url=${targetUrl}">
             <title>Redirecionando...</title>
             <style>
                 * {
@@ -928,6 +926,13 @@ app.get('/aguarde', async (req, res) => {
                     font-size: 0.9rem;
                     color: #a0a0a0;
                     line-height: 1.4;
+                    margin-bottom: 10px;
+                }
+                
+                .status {
+                    font-size: 0.8rem;
+                    color: #6b7280;
+                    margin-top: 15px;
                 }
                 
                 .fallback-link {
@@ -951,35 +956,98 @@ app.get('/aguarde', async (req, res) => {
             <div class="redirect-container">
                 <div class="spinner"></div>
                 <h1>Redirecionando...</h1>
-                <p>Se não for redirecionado automaticamente:</p>
-                <a href="${targetUrl}" class="fallback-link" rel="noreferrer">Clique aqui</a>
+                <p>Configurando referer spoofing...</p>
+                <div class="status" id="status">Registrando Service Worker...</div>
+                <a href="${targetUrl}" class="fallback-link" style="display:none;" id="fallback">Continuar Manualmente</a>
             </div>
             
             <script>
-                // Define o referrer via JavaScript antes do redirecionamento
-                if (document.referrer !== '${spoofInfo.referer}') {
-                    try {
-                        // Tenta definir via Object.defineProperty (alguns navegadores)
-                        Object.defineProperty(document, 'referrer', {
-                            value: '${spoofInfo.referer}',
-                            writable: false
+                const targetUrl = '${targetUrl}';
+                const spoofedReferer = '${spoofInfo.referer}';
+                const statusEl = document.getElementById('status');
+                const fallbackEl = document.getElementById('fallback');
+                
+                // Service Worker para interceptar requisições
+                const serviceWorkerCode = \`
+                    const SPOOFED_REFERER = '\${spoofedReferer}';
+                    const TARGET_URL = '\${targetUrl}';
+                    
+                    self.addEventListener('fetch', function(event) {
+                        // Intercepta apenas requisições para o destino
+                        if (event.request.url.includes(new URL(TARGET_URL).hostname)) {
+                            console.log('🎯 Intercepting request to:', event.request.url);
+                            
+                            // Clona a requisição e adiciona referer spoofado
+                            const modifiedRequest = new Request(event.request, {
+                                headers: new Headers({
+                                    ...Object.fromEntries(event.request.headers.entries()),
+                                    'Referer': SPOOFED_REFERER,
+                                    'Referrer': SPOOFED_REFERER
+                                })
+                            });
+                            
+                            event.respondWith(fetch(modifiedRequest));
+                        }
+                    });
+                    
+                    self.addEventListener('message', function(event) {
+                        if (event.data.action === 'redirect') {
+                            // Força redirecionamento via Service Worker
+                            event.ports[0].postMessage({success: true});
+                        }
+                    });
+                \`;
+                
+                // Registra o Service Worker
+                if ('serviceWorker' in navigator) {
+                    const blob = new Blob([serviceWorkerCode], {type: 'application/javascript'});
+                    const swUrl = URL.createObjectURL(blob);
+                    
+                    navigator.serviceWorker.register(swUrl)
+                        .then(function(registration) {
+                            console.log('✅ Service Worker registrado:', registration);
+                            statusEl.textContent = 'Service Worker ativo - Preparando redirecionamento...';
+                            
+                            // Aguarda o SW estar ativo
+                            return navigator.serviceWorker.ready;
+                        })
+                        .then(function(registration) {
+                            console.log('🚀 Service Worker pronto');
+                            statusEl.textContent = 'Redirecionando com referer spoofado...';
+                            
+                            // Aguarda um pouco para garantir que o SW está interceptando
+                            setTimeout(function() {
+                                // Redireciona para o destino
+                                window.location.href = targetUrl;
+                            }, 1000);
+                        })
+                        .catch(function(error) {
+                            console.error('❌ Erro no Service Worker:', error);
+                            statusEl.textContent = 'Erro no Service Worker - usando fallback...';
+                            fallbackEl.style.display = 'inline-block';
+                            
+                            // Fallback sem Service Worker
+                            setTimeout(function() {
+                                window.location.href = targetUrl;
+                            }, 2000);
                         });
-                    } catch(e) {
-                        console.log('Referrer spoofing via JS not supported');
-                    }
+                } else {
+                    console.log('❌ Service Worker não suportado');
+                    statusEl.textContent = 'Service Worker não suportado - redirecionamento direto...';
+                    fallbackEl.style.display = 'inline-block';
+                    
+                    // Fallback para navegadores sem suporte
+                    setTimeout(function() {
+                        window.location.href = targetUrl;
+                    }, 2000);
                 }
                 
-                // Fallback para garantir o redirecionamento
+                // Cleanup do blob URL após uso
                 setTimeout(function() {
-                    // Cria um link temporário com rel="noreferrer" 
-                    const link = document.createElement('a');
-                    link.href = '${targetUrl}';
-                    link.rel = 'noreferrer';
-                    link.target = '_self';
-                    link.style.display = 'none';
-                    document.body.appendChild(link);
-                    link.click();
-                }, 100);
+                    if (window.swBlobUrl) {
+                        URL.revokeObjectURL(window.swBlobUrl);
+                    }
+                }, 5000);
             </script>
         </body>
         </html>
@@ -1451,7 +1519,7 @@ app.get('/test-referer-generator', (req, res) => {
                     <strong>⚠️ Como funciona:</strong><br>
                     1. Clique em "Testar Agora" ou cole a URL no navegador<br>
                     2. Você verá uma página de carregamento por 3 segundos<br>
-                    3. Meta refresh redirecionará para o destino com referer spoofado<br>
+                    3. Service Worker interceptará requisições e modificará o referer<br>
                     4. Para teste interno: use /check-referer para verificar o referer real
                 </div>
             </div>
@@ -1488,7 +1556,7 @@ app.get('/test-referer-generator', (req, res) => {
                 
                 <div class="info-card">
                     <h4>⚙️ Configurações Técnicas</h4>
-                    <p><strong>Redirecionamento:</strong> Meta refresh com referer spoofing</p>
+                    <p><strong>Redirecionamento:</strong> Service Worker com referer spoofing</p>
                     <p><strong>Timeout:</strong> 3 segundos na página de carregamento</p>
                     <p><strong>Encoding:</strong> URLs são codificadas em Base64</p>
                     <p><strong>Referrers:</strong> Google, Facebook, YouTube, Instagram, X.com</p>
