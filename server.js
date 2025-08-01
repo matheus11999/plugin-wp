@@ -513,85 +513,254 @@ app.get('/aguarde', async (req, res) => {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Aguarde...</title>
+        <title>Redirecionando...</title>
         <style>
-            body {
-                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            * {
                 margin: 0;
                 padding: 0;
+                box-sizing: border-box;
+            }
+            
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+                background-color: #0f0f0f;
+                color: #ffffff;
+                min-height: 100vh;
                 display: flex;
                 justify-content: center;
                 align-items: center;
-                min-height: 100vh;
-                color: white;
+                padding: 20px;
+                overflow: hidden;
             }
+            
             .loading-container {
                 text-align: center;
-                background: rgba(255, 255, 255, 0.1);
-                padding: 40px;
-                border-radius: 20px;
-                backdrop-filter: blur(10px);
-                box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
-                border: 1px solid rgba(255, 255, 255, 0.18);
+                background-color: #1a1a1a;
+                padding: 40px 30px;
+                border-radius: 16px;
+                border: 1px solid #2a2a2a;
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+                max-width: 420px;
+                width: 100%;
+                position: relative;
+                overflow: hidden;
             }
+            
+            .loading-container::before {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                height: 2px;
+                background: #4f46e5;
+                animation: glow 2s ease-in-out infinite alternate;
+            }
+            
+            @keyframes glow {
+                from { opacity: 0.5; }
+                to { opacity: 1; }
+            }
+            
             .spinner {
-                width: 50px;
-                height: 50px;
-                border: 5px solid rgba(255, 255, 255, 0.3);
-                border-top: 5px solid white;
+                width: 60px;
+                height: 60px;
+                border: 3px solid #2a2a2a;
+                border-top: 3px solid #4f46e5;
                 border-radius: 50%;
                 animation: spin 1s linear infinite;
-                margin: 0 auto 20px;
+                margin: 0 auto 30px;
             }
+            
             @keyframes spin {
                 0% { transform: rotate(0deg); }
                 100% { transform: rotate(360deg); }
             }
+            
             h1 {
-                margin: 0 0 10px 0;
-                font-size: 2em;
-                font-weight: 300;
+                font-size: 1.8rem;
+                font-weight: 600;
+                color: #ffffff;
+                margin-bottom: 12px;
+                line-height: 1.2;
             }
-            p {
-                margin: 0;
-                font-size: 1.1em;
-                opacity: 0.9;
+            
+            .subtitle {
+                font-size: 0.95rem;
+                color: #a0a0a0;
+                margin-bottom: 30px;
+                line-height: 1.4;
             }
+            
+            .progress-container {
+                margin-top: 30px;
+            }
+            
             .progress-bar {
                 width: 100%;
-                height: 4px;
-                background: rgba(255, 255, 255, 0.3);
-                border-radius: 2px;
-                margin-top: 20px;
+                height: 6px;
+                background-color: #2a2a2a;
+                border-radius: 3px;
                 overflow: hidden;
+                margin-bottom: 15px;
             }
+            
             .progress {
                 height: 100%;
-                background: white;
+                background-color: #4f46e5;
                 width: 0%;
-                border-radius: 2px;
-                animation: progress 3s ease-in-out forwards;
+                border-radius: 3px;
+                animation: progress 3s ease-out forwards;
+                position: relative;
             }
+            
+            .progress::after {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: 0;
+                bottom: 0;
+                right: 0;
+                background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+                animation: shimmer 1.5s infinite;
+            }
+            
             @keyframes progress {
                 0% { width: 0%; }
                 100% { width: 100%; }
+            }
+            
+            @keyframes shimmer {
+                0% { transform: translateX(-100%); }
+                100% { transform: translateX(100%); }
+            }
+            
+            .status-text {
+                font-size: 0.85rem;
+                color: #6b7280;
+                font-weight: 500;
+            }
+            
+            .dots {
+                display: inline-block;
+            }
+            
+            .dots::after {
+                content: '';
+                animation: dots 1.5s steps(4, end) infinite;
+            }
+            
+            @keyframes dots {
+                0%, 20% { content: ''; }
+                40% { content: '.'; }
+                60% { content: '..'; }
+                80%, 100% { content: '...'; }
+            }
+            
+            /* Responsividade */
+            @media (max-width: 480px) {
+                .loading-container {
+                    padding: 30px 20px;
+                    margin: 10px;
+                }
+                
+                h1 {
+                    font-size: 1.5rem;
+                }
+                
+                .subtitle {
+                    font-size: 0.9rem;
+                }
+                
+                .spinner {
+                    width: 50px;
+                    height: 50px;
+                    margin-bottom: 25px;
+                }
+            }
+            
+            @media (max-width: 320px) {
+                .loading-container {
+                    padding: 25px 15px;
+                }
+                
+                h1 {
+                    font-size: 1.3rem;
+                }
+                
+                .spinner {
+                    width: 45px;
+                    height: 45px;
+                }
+            }
+            
+            /* Modo landscape mobile */
+            @media (max-height: 500px) and (orientation: landscape) {
+                body {
+                    padding: 10px;
+                }
+                
+                .loading-container {
+                    padding: 25px 30px;
+                }
+                
+                .spinner {
+                    width: 45px;
+                    height: 45px;
+                    margin-bottom: 20px;
+                }
+                
+                h1 {
+                    font-size: 1.4rem;
+                    margin-bottom: 8px;
+                }
+                
+                .subtitle {
+                    font-size: 0.85rem;
+                    margin-bottom: 20px;
+                }
+                
+                .progress-container {
+                    margin-top: 20px;
+                }
             }
         </style>
     </head>
     <body>
         <div class="loading-container">
             <div class="spinner"></div>
-            <h1>Processando...</h1>
-            <p>Aguarde enquanto redirecionamos você para o destino</p>
-            <div class="progress-bar">
-                <div class="progress"></div>
+            <h1>Redirecionando</h1>
+            <p class="subtitle">Preparando seu acesso ao destino solicitado</p>
+            
+            <div class="progress-container">
+                <div class="progress-bar">
+                    <div class="progress"></div>
+                </div>
+                <div class="status-text">
+                    Processando<span class="dots"></span>
+                </div>
             </div>
         </div>
+        
         <script>
+            // Inicia o redirecionamento após 3 segundos
             setTimeout(() => {
                 window.location.href = window.location.href + '&process=1';
             }, 3000);
+            
+            // Adiciona um contador visual opcional
+            let seconds = 3;
+            const statusText = document.querySelector('.status-text');
+            
+            const countdown = setInterval(() => {
+                seconds--;
+                if (seconds > 0) {
+                    statusText.innerHTML = \`Redirecionando em \${seconds}s<span class="dots"></span>\`;
+                } else {
+                    statusText.innerHTML = 'Redirecionando<span class="dots"></span>';
+                    clearInterval(countdown);
+                }
+            }, 1000);
         </script>
     </body>
     </html>
