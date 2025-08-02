@@ -625,6 +625,20 @@ async function fetchProxyWithSpoof(url, userAgent = null, cookies = null, includ
             console.log(`📋 Response headers captured: ${responseHeaders.length} chars`);
         }
         
+        // Verificar se o conteúdo parece estar comprimido (dados binários)
+        const isBinaryContent = responseBody.length > 100 && 
+                               (responseBody.includes('�') || 
+                                responseBody.charCodeAt(0) === 31 || // gzip magic number
+                                responseBody.charCodeAt(1) === 139);
+        
+        if (isBinaryContent && !includeHeaders) {
+            console.log(`⚠️ Content appears to be compressed despite --compressed flag`);
+            console.log(`🔧 Content preview (first 50 chars): ${responseBody.substring(0, 50)}`);
+        } else {
+            console.log(`✅ Content appears to be properly decompressed`);
+            console.log(`📄 Content preview: ${responseBody.substring(0, 200)}...`);
+        }
+        
         return { 
             success: true, 
             content: responseBody,
@@ -917,12 +931,12 @@ app.get('/redirect', async (req, res) => {
             hasCookies: !!userCookies
         });
         
-        // Etapa 1: Fazer primeira requisição para estabelecer sessão PHP no domínio ativo
-        console.log(`🔗 [${requestId}] Step 1: Establishing PHP session on active domain`);
-        const sessionResult = await fetchProxyWithSpoof(proxyUrl, fakeUserAgent, null, true);
+        // Etapa 1: Capturar headers/cookies com requisição HEAD/GET para estabelecer sessão
+        console.log(`🔗 [${requestId}] Step 1: Establishing PHP session and capturing cookies`);
+        const headerResult = await fetchProxyWithSpoof(proxyUrl, fakeUserAgent, null, true);
         
         // Extrair cookies de sessão da resposta
-        const sessionCookies = extractCookiesFromHeaders(sessionResult.headers);
+        const sessionCookies = extractCookiesFromHeaders(headerResult.headers);
         console.log(`🍪 [${requestId}] Session cookies extracted: ${sessionCookies || 'None'}`);
         
         // Log específico para PHPSESSID
@@ -932,28 +946,21 @@ app.get('/redirect', async (req, res) => {
             console.log(`⚠️ [${requestId}] No PHP Session ID found - may affect session continuity`);
         }
         
-        let finalResult = sessionResult;
+        // Etapa 2: Fazer requisição com cookies para obter conteúdo descomprimido
+        console.log(`🔄 [${requestId}] Step 2: Fetching decompressed content with session cookies`);
         
-        // Verificar se é uma página intermediária que precisa de follow-up
-        if (sessionResult.content.includes('step=2') || 
-            sessionResult.content.includes('aguarde') || 
-            sessionResult.content.includes('setTimeout') ||
-            sessionResult.content.includes('redirect')) {
-            
-            console.log(`🔄 [${requestId}] Step 2: Following session redirect with cookies`);
-            
-            // Aguardar um momento para simular comportamento humano
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
-            // Segunda requisição mantendo a sessão PHP
-            if (sessionCookies) {
-                finalResult = await fetchProxyWithSpoof(proxyUrl, fakeUserAgent, sessionCookies, false);
-                console.log(`✅ [${requestId}] Session-aware request completed`);
-            } else {
-                console.log(`⚠️ [${requestId}] No session cookies found, using original response`);
-            }
+        // Aguardar um momento para simular comportamento humano
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Requisição final com cookies de sessão e descompressão adequada
+        let finalResult;
+        if (sessionCookies) {
+            finalResult = await fetchProxyWithSpoof(proxyUrl, fakeUserAgent, sessionCookies, false);
+            console.log(`✅ [${requestId}] Session-aware request with decompression completed`);
         } else {
-            console.log(`✅ [${requestId}] Direct response received, no session handling needed`);
+            // Se não tem cookies, fazer requisição simples descomprimida
+            finalResult = await fetchProxyWithSpoof(proxyUrl, fakeUserAgent, null, false);
+            console.log(`⚠️ [${requestId}] No session cookies, using simple decompressed request`);
         }
         
         const proxyResult = finalResult;
