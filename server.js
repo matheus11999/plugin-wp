@@ -883,8 +883,7 @@ app.get('/aguarde', async (req, res) => {
                         </div>
                     </div>
                 \`;
-                return;
-            }
+            } else {
             
             // Sistema de countdown e redirecionamento
             let countdown = ${CONFIG.WAIT_DELAY_SECONDS};
@@ -948,6 +947,7 @@ app.get('/aguarde', async (req, res) => {
                         }
                     }
                 }, 1000);
+            }
             }
         </script>
     </body>
