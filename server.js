@@ -586,17 +586,16 @@ app.get('/aguarde', async (req, res) => {
         `);
     }
 
-    // Página de wait moderna e elegante
+    // Página de aguarde simples - preta com progress bar
     const waitPageHtml = `
     <!DOCTYPE html>
     <html lang="pt-BR">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
-        <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+        <meta name="robots" content="noindex, nofollow">
         <meta name="referrer" content="no-referrer">
-        <title>Aguarde - Redirecionando...</title>
+        <title>Aguarde</title>
         <style>
             * {
                 margin: 0;
@@ -605,8 +604,8 @@ app.get('/aguarde', async (req, res) => {
             }
             
             body {
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                font-family: Arial, sans-serif;
+                background: #000000;
                 color: #ffffff;
                 min-height: 100vh;
                 display: flex;
@@ -614,128 +613,36 @@ app.get('/aguarde', async (req, res) => {
                 justify-content: center;
                 align-items: center;
                 padding: 20px;
-                overflow: hidden;
-                position: relative;
-            }
-            
-            /* Animação de fundo */
-            body::before {
-                content: '';
-                position: absolute;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                background: linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.1) 50%, transparent 70%);
-                animation: shimmer 3s infinite;
-                z-index: 0;
-            }
-            
-            @keyframes shimmer {
-                0% { transform: translateX(-100%); }
-                100% { transform: translateX(100%); }
             }
             
             .container {
                 text-align: center;
-                max-width: 450px;
+                max-width: 400px;
                 width: 100%;
-                position: relative;
-                z-index: 1;
-                background: rgba(255, 255, 255, 0.1);
-                backdrop-filter: blur(10px);
-                border-radius: 20px;
-                padding: 40px;
-                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
-                border: 1px solid rgba(255, 255, 255, 0.2);
-            }
-            
-            .logo {
-                width: 100px;
-                height: 100px;
-                margin: 0 auto 30px;
-                position: relative;
-            }
-            
-            .logo-circle {
-                width: 100%;
-                height: 100%;
-                border: 4px solid rgba(255, 255, 255, 0.3);
-                border-radius: 50%;
-                position: relative;
-                animation: rotate 2s linear infinite;
-            }
-            
-            .logo-circle::before {
-                content: '';
-                position: absolute;
-                top: -4px;
-                left: -4px;
-                right: -4px;
-                bottom: -4px;
-                border: 4px solid transparent;
-                border-top: 4px solid #ffffff;
-                border-radius: 50%;
-                animation: spin 1s linear infinite;
-            }
-            
-            .logo-inner {
-                position: absolute;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                font-size: 2rem;
-                font-weight: bold;
-                color: #ffffff;
-            }
-            
-            @keyframes rotate {
-                0% { transform: rotate(0deg); }
-                100% { transform: rotate(360deg); }
-            }
-            
-            @keyframes spin {
-                0% { transform: rotate(0deg); }
-                100% { transform: rotate(360deg); }
             }
             
             h1 {
-                font-size: 2.2rem;
-                font-weight: 300;
-                margin-bottom: 15px;
-                letter-spacing: -0.5px;
-                text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-            }
-            
-            .subtitle {
-                font-size: 1.1rem;
-                color: rgba(255, 255, 255, 0.8);
-                margin-bottom: 30px;
-                line-height: 1.5;
-            }
-            
-            .progress-container {
-                margin: 30px 0;
+                font-size: 2rem;
+                font-weight: normal;
+                margin-bottom: 40px;
+                letter-spacing: 2px;
             }
             
             .progress-bar {
                 width: 100%;
-                height: 6px;
-                background: rgba(255, 255, 255, 0.2);
-                border-radius: 10px;
+                height: 8px;
+                background: #333333;
+                border-radius: 4px;
                 overflow: hidden;
                 margin-bottom: 20px;
-                position: relative;
             }
             
             .progress-fill {
                 height: 100%;
-                background: linear-gradient(90deg, #ffffff, #f0f0f0, #ffffff);
-                background-size: 200% 100%;
-                border-radius: 10px;
+                background: #ffffff;
+                border-radius: 4px;
                 width: 0%;
-                animation: fillProgress 3s ease-in-out forwards, progressShimmer 1.5s linear infinite;
-                box-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+                animation: fillProgress 3s ease-in-out forwards;
             }
             
             @keyframes fillProgress {
@@ -743,208 +650,37 @@ app.get('/aguarde', async (req, res) => {
                 100% { width: 100%; }
             }
             
-            @keyframes progressShimmer {
-                0% { background-position: -200% 0; }
-                100% { background-position: 200% 0; }
-            }
-            
-            .countdown {
-                font-size: 3rem;
-                font-weight: 700;
-                color: #ffffff;
-                text-shadow: 0 0 30px rgba(255, 255, 255, 0.8);
-                margin: 20px 0;
-                animation: pulse 1s ease-in-out infinite;
-            }
-            
-            @keyframes pulse {
-                0%, 100% { transform: scale(1); opacity: 1; }
-                50% { transform: scale(1.1); opacity: 0.8; }
-            }
-            
-            .status {
-                font-size: 1rem;
-                color: rgba(255, 255, 255, 0.9);
-                font-weight: 500;
-                letter-spacing: 1px;
-                text-transform: uppercase;
-            }
-            
-            .dots::after {
-                content: '';
-                animation: dots 1.5s steps(4, end) infinite;
-            }
-            
-            @keyframes dots {
-                0%, 20% { content: ''; }
-                40% { content: '.'; }
-                60% { content: '..'; }
-                80%, 100% { content: '...'; }
-            }
-            
-            /* Partículas flutuantes */
-            .particle {
-                position: absolute;
-                background: rgba(255, 255, 255, 0.6);
-                border-radius: 50%;
-                pointer-events: none;
-                animation: float 6s infinite ease-in-out;
-            }
-            
-            @keyframes float {
-                0%, 100% { transform: translateY(0px) rotate(0deg); opacity: 0.7; }
-                50% { transform: translateY(-20px) rotate(180deg); opacity: 1; }
-            }
-            
-            /* Responsividade */
             @media (max-width: 480px) {
-                .container { padding: 30px 20px; }
-                h1 { font-size: 1.8rem; }
-                .subtitle { font-size: 1rem; }
-                .countdown { font-size: 2.5rem; }
-                .logo { width: 80px; height: 80px; }
-                .logo-inner { font-size: 1.5rem; }
-            }
-            
-            @media (max-height: 600px) {
+                h1 { font-size: 1.5rem; }
                 .container { padding: 20px; }
-                .logo { width: 70px; height: 70px; margin-bottom: 20px; }
-                h1 { font-size: 1.6rem; margin-bottom: 10px; }
-                .subtitle { font-size: 0.95rem; margin-bottom: 20px; }
-                .countdown { font-size: 2rem; margin: 15px 0; }
             }
         </style>
     </head>
     <body>
-        <!-- Partículas decorativas -->
-        <div class="particle" style="top: 10%; left: 10%; width: 4px; height: 4px; animation-delay: 0s;"></div>
-        <div class="particle" style="top: 20%; left: 80%; width: 6px; height: 6px; animation-delay: 1s;"></div>
-        <div class="particle" style="top: 60%; left: 20%; width: 3px; height: 3px; animation-delay: 2s;"></div>
-        <div class="particle" style="top: 80%; left: 70%; width: 5px; height: 5px; animation-delay: 3s;"></div>
-        <div class="particle" style="top: 30%; left: 60%; width: 4px; height: 4px; animation-delay: 4s;"></div>
-        
         <div class="container">
-            <div class="logo">
-                <div class="logo-circle">
-                    <div class="logo-inner">⚡</div>
-                </div>
-            </div>
+            <h1>Aguarde</h1>
             
-            <h1>Redirecionando</h1>
-            <p class="subtitle">Preparando conexão segura com o destino</p>
-            
-            <div class="progress-container">
-                <div class="progress-bar">
-                    <div class="progress-fill"></div>
-                </div>
-                
-                <div class="countdown" id="countdown">${CONFIG.WAIT_DELAY_SECONDS}</div>
-                <div class="status">
-                    <span id="status">Inicializando</span><span class="dots"></span>
-                </div>
+            <div class="progress-bar">
+                <div class="progress-fill"></div>
             </div>
         </div>
         
         <script>
-            console.log('🚀 LinkGate Wait Page - Iniciando redirecionamento via proxy');
-            
-            // Detecta e bloqueia bots conhecidos
-            const userAgent = navigator.userAgent.toLowerCase();
-            const botPatterns = [
-                'googlebot', 'bingbot', 'slurp', 'duckduckbot', 'baiduspider',
-                'yandexbot', 'facebookexternalhit', 'twitterbot', 'rogerbot',
-                'linkedinbot', 'embedly', 'quora link preview', 'showyoubot',
-                'outbrain', 'pinterest', 'developers.google.com/+/web/snippet',
-                'slackbot', 'vkshare', 'w3c_validator', 'redditbot', 'applebot',
-                'whatsapp', 'flipboard', 'tumblr', 'bitlybot', 'skypeuripreview',
-                'nuzzel', 'discordbot', 'telegrambot', 'msnbot', 'archive.org_bot'
-            ];
-            
-            const isBot = botPatterns.some(pattern => userAgent.includes(pattern));
-            
-            if (isBot) {
-                console.log('🤖 Bot detectado e bloqueado:', userAgent);
-                document.body.innerHTML = \`
-                    <div style="
-                        display: flex; 
-                        justify-content: center; 
-                        align-items: center; 
-                        min-height: 100vh; 
-                        background: #0f0f0f; 
-                        color: #666; 
-                        font-family: Arial, sans-serif;
-                        text-align: center;
-                    ">
-                        <div>
-                            <h1>🔒 Acesso Restrito</h1>
-                            <p>Este conteúdo não está disponível para bots automatizados.</p>
-                        </div>
-                    </div>
-                \`;
-            } else {
-            
-            // Sistema de countdown e redirecionamento
-            let countdown = ${CONFIG.WAIT_DELAY_SECONDS};
-            const countdownEl = document.getElementById('countdown');
-            const statusEl = document.getElementById('status');
+            // Sistema simples de redirecionamento
             const urlParam = new URL(window.location.href).searchParams.get('a');
             
-            if (!urlParam) {
-                console.error('❌ Parâmetro "a" não encontrado na URL');
-                statusEl.textContent = 'Erro: URL inválida';
-            } else {
-                console.log('⏱️ Iniciando countdown de', countdown, 'segundos');
-                
-                const timer = setInterval(() => {
-                    countdown--;
-                    countdownEl.textContent = countdown;
-                    
-                    if (countdown === 2) {
-                        statusEl.textContent = 'Conectando ao proxy';
-                    } else if (countdown === 1) {
-                        statusEl.textContent = 'Redirecionando';
-                    } else if (countdown === 0) {
-                        clearInterval(timer);
-                        statusEl.textContent = 'Redirecionando';
-                        
-                        console.log('🔄 Iniciando redirecionamento direto via proxy');
-                        
-                        // Decodificar URL
-                        let targetUrl;
-                        try {
-                            targetUrl = atob(urlParam);
-                            console.log('🎯 URL de destino:', targetUrl);
-                            
-                            // Lista de domínios ativos - usando nosso próprio servidor para proxy transparente
-                            const currentDomain = window.location.protocol + '//' + window.location.host;
-                            const activeDomains = [
-                                currentDomain  // Usar nosso próprio servidor com endpoint /redirect
-                            ];
-                            
-                            // Selecionar domínio aleatório
-                            const randomDomain = activeDomains[Math.floor(Math.random() * activeDomains.length)];
-                            console.log('🌐 Domínio selecionado:', randomDomain);
-                            
-                            // Construir URL do proxy transparente no nosso servidor
-                            const encodedTargetUrl = btoa(targetUrl);
-                            const proxyUrl = randomDomain + '/redirect?url=' + encodedTargetUrl;
-                            
-                            console.log('🎯 URL do proxy:', proxyUrl);
-                            statusEl.textContent = 'Redirecionando para ' + randomDomain;
-                            
-                            // Redirecionar após um pequeno delay para mostrar a mensagem
-                            setTimeout(() => {
-                                console.log('🚀 Executando redirecionamento para:', proxyUrl);
-                                window.location.href = proxyUrl;
-                            }, 500);
-                            
-                        } catch (e) {
-                            console.error('❌ Erro ao decodificar URL:', e);
-                            statusEl.textContent = 'Erro: URL inválida';
-                        }
+            if (urlParam) {
+                setTimeout(() => {
+                    try {
+                        const targetUrl = atob(urlParam);
+                        const currentDomain = window.location.protocol + '//' + window.location.host;
+                        const encodedTargetUrl = btoa(targetUrl);
+                        const proxyUrl = currentDomain + '/redirect?url=' + encodedTargetUrl;
+                        window.location.href = proxyUrl;
+                    } catch (e) {
+                        console.error('Erro ao decodificar URL:', e);
                     }
-                }, 1000);
-            }
+                }, ${CONFIG.WAIT_DELAY_SECONDS * 1000});
             }
         </script>
     </body>
@@ -1115,8 +851,20 @@ app.get('/redirect', async (req, res) => {
             contentType = 'text/html; charset=utf-8';
         }
         
-        // Headers informativos sobre o proxy transparente
-        res.setHeader('Content-Type', contentType);
+        // Corrigir content-type baseado no conteúdo real
+        let finalContentType = 'text/html; charset=utf-8';
+        const content = proxyResult.content.trim();
+        
+        // Se o conteúdo parece ser HTML, forçar content-type correto
+        if (content.toLowerCase().includes('<!doctype html') || 
+            content.toLowerCase().includes('<html') || 
+            content.toLowerCase().includes('<head') ||
+            content.toLowerCase().includes('<body')) {
+            finalContentType = 'text/html; charset=utf-8';
+        }
+        
+        // Headers para proxy transparente
+        res.setHeader('Content-Type', finalContentType);
         res.setHeader('X-Spoofed-Referer', proxyResult.referer);
         res.setHeader('X-Original-Target', targetUrl);
         res.setHeader('X-Proxy-Through', proxyUrl);
@@ -1124,29 +872,15 @@ app.get('/redirect', async (req, res) => {
         res.setHeader('X-Proxy-By', 'LinkGate-Redirector');
         res.setHeader('X-Request-ID', requestId);
         
-        // Log da operação para auditoria
-        logger.info(`Transparent proxy completed for ${requestId}`, {
-            targetUrl,
-            proxyUrl,
-            activeDomain,
-            contentType,
-            contentLength: proxyResult.content.length,
-            spoofedReferer: proxyResult.referer,
-            userAgent: proxyResult.userAgent,
-            clientIP: req.ip,
-            timestamp: new Date().toISOString()
-        });
+        // Prevenir cache do browser
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
         
-        console.log(`📤 [${requestId}] Sending transparent proxy content (${proxyResult.content.length} bytes, ${contentType})`);
-        console.log(`🎯 [${requestId}] Content served from ${activeDomain} transparently`);
+        console.log(`📤 [${requestId}] Sending content (${proxyResult.content.length} bytes, ${finalContentType})`);
         
-        // Debug: mostrar primeiros 500 caracteres do conteúdo
-        console.log(`🔍 [${requestId}] Content preview:`, proxyResult.content.substring(0, 500));
-        console.log(`🔍 [${requestId}] Content starts with HTML?`, proxyResult.content.trim().toLowerCase().startsWith('<!doctype html') || proxyResult.content.trim().toLowerCase().startsWith('<html'));
-        
-        // Retornar o conteúdo obtido via proxy transparente
-        // URL no navegador permanece wp.mikropix.online/redirect?url=...
-        res.send(proxyResult.content);
+        // Retornar o conteúdo como HTML válido
+        res.status(200).send(proxyResult.content);
         
     } catch (error) {
         console.error(`❌ [${requestId}] Transparent proxy failed:`, error);
