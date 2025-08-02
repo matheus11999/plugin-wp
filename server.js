@@ -934,9 +934,11 @@ app.get('/redirect', async (req, res) => {
         // Nova estratégia: Proxy para página inicial + Meta refresh redirect
         console.log(`🏠 [${requestId}] Step 1: Fetching homepage of active domain to establish session`);
         
-        // Fazer proxy para a página inicial do domínio ativo para estabelecer sessão
+        // Fazer proxy para a página inicial do domínio ativo usando referer spoofing
         const homepageUrl = activeDomain; // URL da página inicial
         const homepageResult = await fetchProxyWithSpoof(homepageUrl, fakeUserAgent, null, false);
+        
+        console.log(`🎲 [${requestId}] Homepage accessed with spoofed referer: ${homepageResult.referer}`);
         
         console.log(`✅ [${requestId}] Homepage content fetched from ${activeDomain}`);
         console.log(`📄 [${requestId}] Homepage content length: ${homepageResult.content.length} characters`);
