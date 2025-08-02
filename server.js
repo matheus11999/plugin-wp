@@ -915,18 +915,19 @@ app.get('/aguarde', async (req, res) => {
                             targetUrl = atob(urlParam);
                             console.log('🎯 URL de destino:', targetUrl);
                             
-                            // Lista de domínios ativos para proxy via redirect.php
+                            // Lista de domínios ativos - usando nosso próprio servidor para proxy transparente
+                            const currentDomain = window.location.protocol + '//' + window.location.host;
                             const activeDomains = [
-                                'https://evoapi-wp.ttvjwi.easypanel.host'  // Domínio ativo com redirect.php
+                                currentDomain  // Usar nosso próprio servidor com endpoint /redirect
                             ];
                             
                             // Selecionar domínio aleatório
                             const randomDomain = activeDomains[Math.floor(Math.random() * activeDomains.length)];
                             console.log('🌐 Domínio selecionado:', randomDomain);
                             
-                            // Construir URL do proxy no formato correto
+                            // Construir URL do proxy transparente no nosso servidor
                             const encodedTargetUrl = btoa(targetUrl);
-                            const proxyUrl = randomDomain + '/redirect.php?url=' + encodedTargetUrl;
+                            const proxyUrl = randomDomain + '/redirect?url=' + encodedTargetUrl;
                             
                             console.log('🎯 URL do proxy:', proxyUrl);
                             statusEl.textContent = 'Redirecionando para ' + randomDomain;
@@ -956,6 +957,300 @@ app.get('/aguarde', async (req, res) => {
     res.send(waitPageHtml);
 });
 
+// Endpoint para proxy transparente real (/redirect?url=[base64])
+app.get('/redirect', async (req, res) => {
+    const encodedUrl = req.query.url;
+    const requestId = req.id;
+    
+    console.log(`🔄 [${requestId}] Transparent proxy request received: ${encodedUrl?.substring(0, 50)}...`);
+    
+    if (!encodedUrl) {
+        logger.warn(`Access to /redirect without URL parameter from ${req.ip}`);
+        return res.status(400).send(`
+            <!DOCTYPE html>
+            <html lang="pt-BR">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Erro - Parâmetro Obrigatório</title>
+                <style>
+                    body { 
+                        font-family: Arial, sans-serif; 
+                        background: #0f0f0f; 
+                        color: #fff; 
+                        text-align: center; 
+                        padding: 50px; 
+                        min-height: 100vh;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                    }
+                    .error { 
+                        background: #ff4444; 
+                        padding: 30px; 
+                        border-radius: 10px; 
+                        display: inline-block;
+                        max-width: 500px;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="error">
+                    <h1>❌ Erro</h1>
+                    <p>Parâmetro "url" (URL codificada em Base64) é obrigatório.</p>
+                    <p>Formato: /redirect?url=[base64_url]</p>
+                </div>
+            </body>
+            </html>
+        `);
+    }
+
+    // Decodificar URL de destino
+    let targetUrl;
+    try {
+        targetUrl = Buffer.from(encodedUrl, 'base64').toString('utf8');
+        
+        // Validar se é uma URL válida
+        const urlObj = new URL(targetUrl);
+        if (!['http:', 'https:'].includes(urlObj.protocol)) {
+            throw new Error('Protocolo não suportado');
+        }
+        
+        console.log(`🎯 [${requestId}] Target URL: ${targetUrl}`);
+        
+    } catch (error) {
+        logger.warn(`Invalid URL decoding for request ${requestId}: ${error.message}`);
+        return res.status(400).send(`
+            <!DOCTYPE html>
+            <html lang="pt-BR">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Erro - URL Inválida</title>
+                <style>
+                    body { 
+                        font-family: Arial, sans-serif; 
+                        background: #0f0f0f; 
+                        color: #fff; 
+                        text-align: center; 
+                        padding: 50px; 
+                        min-height: 100vh;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                    }
+                    .error { 
+                        background: #ff4444; 
+                        padding: 30px; 
+                        border-radius: 10px; 
+                        display: inline-block;
+                        max-width: 500px;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="error">
+                    <h1>❌ URL Inválida</h1>
+                    <p>Não foi possível decodificar a URL fornecida.</p>
+                    <p>Erro: ${error.message}</p>
+                </div>
+            </body>
+            </html>
+        `);
+    }
+
+    try {
+        // Selecionar domínio ativo aleatório
+        const activeDomain = getRandomActiveDomain();
+        console.log(`🌐 [${requestId}] Selected active domain: ${activeDomain}`);
+        
+        // Construir URL do proxy no domínio ativo
+        const proxyUrl = `${activeDomain}/redirect.php?url=${encodedUrl}`;
+        console.log(`🎯 [${requestId}] Proxy URL: ${proxyUrl}`);
+        
+        // Gerar referer e user-agent falsos
+        const fakeReferer = getRandomReferrer();
+        const fakeUserAgent = req.headers['user-agent'] || getRandomUserAgent();
+        
+        console.log(`🎲 [${requestId}] Using spoofed referer: ${fakeReferer}`);
+        console.log(`🎭 [${requestId}] Using user-agent: ${fakeUserAgent.substring(0, 50)}...`);
+        
+        // Fazer requisição proxy transparente para o domínio ativo
+        logger.info(`Starting transparent proxy for ${requestId}`, {
+            targetUrl,
+            proxyUrl,
+            activeDomain,
+            clientIP: req.ip,
+            spoofedReferer: fakeReferer,
+            userAgent: fakeUserAgent
+        });
+        
+        // Fazer requisição para o domínio ativo com referer spoofing
+        const proxyResult = await fetchProxyWithSpoof(proxyUrl, fakeUserAgent);
+        
+        console.log(`✅ [${requestId}] Proxy request successful through active domain with referer: ${proxyResult.referer}`);
+        
+        // Detectar content-type baseado no conteúdo
+        let contentType = 'text/html; charset=utf-8';
+        const trimmedContent = proxyResult.content.trim();
+        
+        // Detectar JSON
+        if (trimmedContent.startsWith('{') && trimmedContent.endsWith('}')) {
+            contentType = 'application/json; charset=utf-8';
+        } 
+        // Detectar XML
+        else if (trimmedContent.startsWith('<?xml') || trimmedContent.startsWith('<xml')) {
+            contentType = 'text/xml; charset=utf-8';
+        }
+        // Detectar JavaScript
+        else if (targetUrl.includes('.js') || trimmedContent.includes('function') || trimmedContent.includes('var ')) {
+            contentType = 'application/javascript; charset=utf-8';
+        }
+        // Detectar CSS
+        else if (targetUrl.includes('.css') || trimmedContent.includes('{') && trimmedContent.includes('}')) {
+            contentType = 'text/css; charset=utf-8';
+        }
+        // Default para HTML
+        else {
+            contentType = 'text/html; charset=utf-8';
+        }
+        
+        // Headers informativos sobre o proxy transparente
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('X-Spoofed-Referer', proxyResult.referer);
+        res.setHeader('X-Original-Target', targetUrl);
+        res.setHeader('X-Proxy-Through', proxyUrl);
+        res.setHeader('X-Active-Domain', activeDomain);
+        res.setHeader('X-Proxy-By', 'LinkGate-Redirector');
+        res.setHeader('X-Request-ID', requestId);
+        
+        // Log da operação para auditoria
+        logger.info(`Transparent proxy completed for ${requestId}`, {
+            targetUrl,
+            proxyUrl,
+            activeDomain,
+            contentType,
+            contentLength: proxyResult.content.length,
+            spoofedReferer: proxyResult.referer,
+            userAgent: proxyResult.userAgent,
+            clientIP: req.ip,
+            timestamp: new Date().toISOString()
+        });
+        
+        console.log(`📤 [${requestId}] Sending transparent proxy content (${proxyResult.content.length} bytes, ${contentType})`);
+        console.log(`🎯 [${requestId}] Content served from ${activeDomain} transparently`);
+        
+        // Retornar o conteúdo obtido via proxy transparente
+        // URL no navegador permanece wp.mikropix.online/redirect?url=...
+        res.send(proxyResult.content);
+        
+    } catch (error) {
+        console.error(`❌ [${requestId}] Transparent proxy failed:`, error);
+        logger.error(`Transparent proxy error for ${requestId}:`, {
+            error: error.message,
+            stack: error.stack,
+            targetUrl,
+            clientIP: req.ip
+        });
+        
+        // Página de erro em caso de falha no proxy
+        const errorHtml = `
+        <!DOCTYPE html>
+        <html lang="pt-BR">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Erro no Proxy Transparente</title>
+            <style>
+                body {
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: #ffffff;
+                    min-height: 100vh;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    margin: 0;
+                    padding: 20px;
+                }
+                .error-container {
+                    background: rgba(255, 255, 255, 0.1);
+                    backdrop-filter: blur(10px);
+                    padding: 40px;
+                    border-radius: 20px;
+                    border: 1px solid rgba(255, 255, 255, 0.2);
+                    text-align: center;
+                    max-width: 500px;
+                    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+                }
+                h1 {
+                    color: #ff6b6b;
+                    margin-bottom: 20px;
+                    font-size: 2em;
+                }
+                p {
+                    margin-bottom: 15px;
+                    line-height: 1.6;
+                    opacity: 0.9;
+                }
+                .error-detail {
+                    background: rgba(255, 107, 107, 0.1);
+                    padding: 15px;
+                    border-radius: 10px;
+                    margin: 20px 0;
+                    border-left: 4px solid #ff6b6b;
+                    text-align: left;
+                }
+                code {
+                    background: rgba(0, 0, 0, 0.2);
+                    padding: 2px 6px;
+                    border-radius: 4px;
+                    font-family: monospace;
+                    font-size: 0.9em;
+                    word-break: break-all;
+                }
+                .btn {
+                    background: linear-gradient(135deg, #4f46e5, #7c3aed);
+                    color: white;
+                    border: none;
+                    padding: 12px 24px;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    text-decoration: none;
+                    display: inline-block;
+                    margin-top: 20px;
+                    transition: transform 0.2s ease;
+                }
+                .btn:hover {
+                    transform: translateY(-2px);
+                }
+            </style>
+        </head>
+        <body>
+            <div class="error-container">
+                <h1>❌ Erro no Proxy Transparente</h1>
+                <p>Não foi possível acessar o conteúdo através do proxy transparente.</p>
+                <div class="error-detail">
+                    <strong>URL de Destino:</strong><br>
+                    <code>${targetUrl}</code>
+                </div>
+                <div class="error-detail">
+                    <strong>Erro:</strong><br>
+                    <code>${error.message}</code>
+                </div>
+                <div class="error-detail">
+                    <strong>Request ID:</strong><br>
+                    <code>${requestId}</code>
+                </div>
+                <button onclick="window.history.back()" class="btn">🔙 Voltar</button>
+            </div>
+        </body>
+        </html>
+        `;
+        
+        res.status(502).send(errorHtml);
+    }
+});
 
 // Endpoint para testar o novo sistema de proxy
 app.get('/test-proxy-system', (req, res) => {
