@@ -895,61 +895,60 @@ app.get('/aguarde', async (req, res) => {
             if (!urlParam) {
                 console.error('❌ Parâmetro "a" não encontrado na URL');
                 statusEl.textContent = 'Erro: URL inválida';
-                return;
-            }
-            
-            console.log('⏱️ Iniciando countdown de', countdown, 'segundos');
-            
-            const timer = setInterval(() => {
-                countdown--;
-                countdownEl.textContent = countdown;
+            } else {
+                console.log('⏱️ Iniciando countdown de', countdown, 'segundos');
                 
-                if (countdown === 2) {
-                    statusEl.textContent = 'Conectando ao proxy';
-                } else if (countdown === 1) {
-                    statusEl.textContent = 'Redirecionando';
-                } else if (countdown === 0) {
-                    clearInterval(timer);
-                    statusEl.textContent = 'Redirecionando';
+                const timer = setInterval(() => {
+                    countdown--;
+                    countdownEl.textContent = countdown;
                     
-                    console.log('🔄 Iniciando redirecionamento direto via proxy');
-                    
-                    // Decodificar URL
-                    let targetUrl;
-                    try {
-                        targetUrl = atob(urlParam);
-                        console.log('🎯 URL de destino:', targetUrl);
-                    } catch (e) {
-                        console.error('❌ Erro ao decodificar URL:', e);
-                        statusEl.textContent = 'Erro: URL inválida';
-                        return;
+                    if (countdown === 2) {
+                        statusEl.textContent = 'Conectando ao proxy';
+                    } else if (countdown === 1) {
+                        statusEl.textContent = 'Redirecionando';
+                    } else if (countdown === 0) {
+                        clearInterval(timer);
+                        statusEl.textContent = 'Redirecionando';
+                        
+                        console.log('🔄 Iniciando redirecionamento direto via proxy');
+                        
+                        // Decodificar URL
+                        let targetUrl;
+                        try {
+                            targetUrl = atob(urlParam);
+                            console.log('🎯 URL de destino:', targetUrl);
+                            
+                            // Lista de domínios ativos (deve estar sincronizada com o servidor)
+                            const activeDomains = [
+                                'https://evoapi-wp.ttvjwi.easypanel.host',
+                                'https://example.com',
+                                'https://client-website.com'
+                            ];
+                            
+                            // Selecionar domínio aleatório
+                            const randomDomain = activeDomains[Math.floor(Math.random() * activeDomains.length)];
+                            console.log('🌐 Domínio selecionado:', randomDomain);
+                            
+                            // Construir URL do proxy
+                            const encodedTargetUrl = btoa(targetUrl);
+                            const proxyUrl = randomDomain + '/redirect?url=' + encodedTargetUrl;
+                            
+                            console.log('🎯 URL do proxy:', proxyUrl);
+                            statusEl.textContent = 'Redirecionando para ' + randomDomain;
+                            
+                            // Redirecionar após um pequeno delay para mostrar a mensagem
+                            setTimeout(() => {
+                                console.log('🚀 Executando redirecionamento para:', proxyUrl);
+                                window.location.href = proxyUrl;
+                            }, 500);
+                            
+                        } catch (e) {
+                            console.error('❌ Erro ao decodificar URL:', e);
+                            statusEl.textContent = 'Erro: URL inválida';
+                        }
                     }
-                    
-                    // Lista de domínios ativos (deve estar sincronizada com o servidor)
-                    const activeDomains = [
-                        'https://evoapi-wp.ttvjwi.easypanel.host',
-                        'https://example.com',
-                        'https://client-website.com'
-                    ];
-                    
-                    // Selecionar domínio aleatório
-                    const randomDomain = activeDomains[Math.floor(Math.random() * activeDomains.length)];
-                    console.log('🌐 Domínio selecionado:', randomDomain);
-                    
-                    // Construir URL do proxy
-                    const encodedTargetUrl = btoa(targetUrl);
-                    const proxyUrl = randomDomain + '/redirect?url=' + encodedTargetUrl;
-                    
-                    console.log('🎯 URL do proxy:', proxyUrl);
-                    statusEl.textContent = 'Redirecionando para ' + randomDomain;
-                    
-                    // Redirecionar após um pequeno delay para mostrar a mensagem
-                    setTimeout(() => {
-                        console.log('🚀 Executando redirecionamento para:', proxyUrl);
-                        window.location.href = proxyUrl;
-                    }, 500);
-                }
-            }, 1000);
+                }, 1000);
+            }
         </script>
     </body>
     </html>
