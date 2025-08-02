@@ -1140,6 +1140,10 @@ app.get('/redirect', async (req, res) => {
         console.log(`📤 [${requestId}] Sending transparent proxy content (${proxyResult.content.length} bytes, ${contentType})`);
         console.log(`🎯 [${requestId}] Content served from ${activeDomain} transparently`);
         
+        // Debug: mostrar primeiros 500 caracteres do conteúdo
+        console.log(`🔍 [${requestId}] Content preview:`, proxyResult.content.substring(0, 500));
+        console.log(`🔍 [${requestId}] Content starts with HTML?`, proxyResult.content.trim().toLowerCase().startsWith('<!doctype html') || proxyResult.content.trim().toLowerCase().startsWith('<html'));
+        
         // Retornar o conteúdo obtido via proxy transparente
         // URL no navegador permanece wp.mikropix.online/redirect?url=...
         res.send(proxyResult.content);
