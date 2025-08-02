@@ -910,86 +910,44 @@ app.get('/aguarde', async (req, res) => {
                     statusEl.textContent = 'Redirecionando';
                 } else if (countdown === 0) {
                     clearInterval(timer);
-                    statusEl.textContent = 'Processando';
+                    statusEl.textContent = 'Redirecionando';
                     
-                    console.log('🔄 Iniciando redirecionamento via proxy');
+                    console.log('🔄 Iniciando redirecionamento direto via proxy');
                     
-                    // Fazer requisição para o endpoint de proxy
-                    fetch('/proxy-redirect', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'User-Agent': navigator.userAgent,
-                            'Accept': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            encodedUrl: urlParam,
-                            userAgent: navigator.userAgent,
-                            referrer: document.referrer || '',
-                            timestamp: new Date().toISOString()
-                        })
-                    })
-                    .then(response => {
-                        if (!response.ok) {
-                            throw new Error(\`HTTP \${response.status}: \${response.statusText}\`);
-                        }
-                        return response.json();
-                    })
-                    .then(data => {
-                        console.log('✅ Resposta do proxy recebida:', data);
-                        
-                        if (data.success && data.proxyUrl) {
-                            console.log('🎯 Redirecionando para:', data.proxyUrl);
-                            statusEl.textContent = 'Redirecionando para domínio ativo';
-                            
-                            // Redirecionar para a URL do proxy
-                            setTimeout(() => {
-                                window.location.href = data.proxyUrl;
-                            }, 500);
-                        } else {
-                            throw new Error(data.error || 'Resposta inválida do servidor');
-                        }
-                    })
-                    .catch(error => {
-                        console.error('❌ Erro no redirecionamento:', error);
-                        statusEl.textContent = 'Erro no redirecionamento';
-                        
-                        // Mostrar página de erro
-                        document.body.innerHTML = \`
-                            <div style="
-                                display: flex; 
-                                justify-content: center; 
-                                align-items: center; 
-                                min-height: 100vh; 
-                                background: #0f0f0f; 
-                                color: #fff; 
-                                font-family: Arial, sans-serif;
-                                text-align: center;
-                                padding: 20px;
-                            ">
-                                <div style="
-                                    background: rgba(244, 67, 54, 0.1); 
-                                    padding: 30px; 
-                                    border-radius: 15px; 
-                                    border: 1px solid #f44336;
-                                    max-width: 500px;
-                                ">
-                                    <h1 style="color: #f44336; margin-bottom: 20px;">❌ Erro no Redirecionamento</h1>
-                                    <p style="margin-bottom: 15px;">Não foi possível processar a requisição de redirecionamento.</p>
-                                    <p style="color: #a0a0a0; font-size: 0.9em;">Erro: \${error.message}</p>
-                                    <button onclick="window.history.back()" style="
-                                        background: #4f46e5; 
-                                        color: white; 
-                                        border: none; 
-                                        padding: 10px 20px; 
-                                        border-radius: 5px; 
-                                        cursor: pointer;
-                                        margin-top: 20px;
-                                    ">Voltar</button>
-                                </div>
-                            </div>
-                        \`;
-                    });
+                    // Decodificar URL
+                    let targetUrl;
+                    try {
+                        targetUrl = atob(urlParam);
+                        console.log('🎯 URL de destino:', targetUrl);
+                    } catch (e) {
+                        console.error('❌ Erro ao decodificar URL:', e);
+                        statusEl.textContent = 'Erro: URL inválida';
+                        return;
+                    }
+                    
+                    // Lista de domínios ativos (deve estar sincronizada com o servidor)
+                    const activeDomains = [
+                        'https://evoapi-wp.ttvjwi.easypanel.host',
+                        'https://example.com',
+                        'https://client-website.com'
+                    ];
+                    
+                    // Selecionar domínio aleatório
+                    const randomDomain = activeDomains[Math.floor(Math.random() * activeDomains.length)];
+                    console.log('🌐 Domínio selecionado:', randomDomain);
+                    
+                    // Construir URL do proxy
+                    const encodedTargetUrl = btoa(targetUrl);
+                    const proxyUrl = randomDomain + '/redirect?url=' + encodedTargetUrl;
+                    
+                    console.log('🎯 URL do proxy:', proxyUrl);
+                    statusEl.textContent = 'Redirecionando para ' + randomDomain;
+                    
+                    // Redirecionar após um pequeno delay para mostrar a mensagem
+                    setTimeout(() => {
+                        console.log('🚀 Executando redirecionamento para:', proxyUrl);
+                        window.location.href = proxyUrl;
+                    }, 500);
                 }
             }, 1000);
         </script>
@@ -1001,400 +959,6 @@ app.get('/aguarde', async (req, res) => {
     logger.info(`📄 Displaying wait page for URL parameter: ${encodedUrl.substring(0, 50)}...`);
     console.log(`⏱️ Wait page shown, user will be redirected in ${CONFIG.WAIT_DELAY_SECONDS} seconds`);
     res.send(waitPageHtml);
-});
-
-// Novo endpoint para redirecionamento via proxy
-app.post('/proxy-redirect', [
-    body('encodedUrl')
-        .isLength({ min: 1, max: 2000 })
-        .withMessage('encodedUrl deve ter entre 1 e 2000 caracteres')
-        .matches(/^[A-Za-z0-9+/=]+$/)
-        .withMessage('encodedUrl deve ser um Base64 válido'),
-    body('userAgent').optional().isLength({ max: 500 }),
-    body('referrer').optional().isLength({ max: 500 })
-], async (req, res) => {
-    const requestId = req.id;
-    console.log(`🔄 [${requestId}] Proxy redirect request received`);
-    
-    try {
-        // Validar dados de entrada
-        const errors = validationResult(req);
-        if (!errors.isEmpty()) {
-            logger.warn(`Validation errors for proxy redirect ${requestId}:`, errors.array());
-            return res.status(400).json({
-                success: false,
-                error: 'Dados de entrada inválidos',
-                details: errors.array(),
-                requestId
-            });
-        }
-        
-        const { encodedUrl, userAgent, referrer, timestamp } = req.body;
-        
-        // Decodificar URL de destino
-        let targetUrl;
-        try {
-            targetUrl = Buffer.from(encodedUrl, 'base64').toString('utf8');
-            
-            // Validar se é uma URL válida
-            const urlObj = new URL(targetUrl);
-            if (!['http:', 'https:'].includes(urlObj.protocol)) {
-                throw new Error('Protocolo não suportado');
-            }
-        } catch (error) {
-            logger.warn(`Invalid URL decoding for request ${requestId}: ${error.message}`);
-            return res.status(400).json({
-                success: false,
-                error: 'URL codificada inválida',
-                requestId
-            });
-        }
-        
-        console.log(`🎯 [${requestId}] Target URL: ${targetUrl}`);
-        console.log(`🔍 [${requestId}] User-Agent: ${userAgent?.substring(0, 50)}...`);
-        console.log(`🔗 [${requestId}] Referrer: ${referrer || 'none'}`);
-        
-        // Selecionar domínio ativo aleatório
-        const activeDomain = getRandomActiveDomain();
-        console.log(`🌐 [${requestId}] Selected active domain: ${activeDomain}`);
-        
-        // Construir URL do proxy
-        const encodedTargetUrl = Buffer.from(targetUrl).toString('base64');
-        const proxyUrl = `${activeDomain}/redirect?url=${encodedTargetUrl}`;
-        
-        console.log(`🎯 [${requestId}] Proxy URL constructed: ${proxyUrl}`);
-        
-        // Gerar referer falso para spoofing
-        const fakeReferer = getRandomReferrer();
-        const fakeUserAgent = userAgent || getRandomUserAgent();
-        
-        console.log(`🎲 [${requestId}] Using fake referer: ${fakeReferer}`);
-        console.log(`🎭 [${requestId}] Using user-agent: ${fakeUserAgent.substring(0, 50)}...`);
-        
-        // Fazer requisição de teste para verificar se o domínio está online
-        try {
-            console.log(`🔍 [${requestId}] Testing domain connectivity...`);
-            const testCommand = `curl -s -I --max-time 10 --referer "${fakeReferer}" --user-agent "${fakeUserAgent}" "${activeDomain}"`;
-            const { stdout: testResult } = await execAsync(testCommand);
-            
-            if (!testResult || !testResult.includes('HTTP/')) {
-                throw new Error('Domain não respondeu corretamente');
-            }
-            
-            console.log(`✅ [${requestId}] Domain is responsive`);
-        } catch (error) {
-            console.log(`⚠️ [${requestId}] Domain test failed: ${error.message}`);
-            logger.warn(`Domain connectivity test failed for ${activeDomain}: ${error.message}`);
-            
-            // Tentar outro domínio se disponível
-            const fallbackDomains = CONFIG.ACTIVE_DOMAINS.filter(d => d !== activeDomain);
-            if (fallbackDomains.length > 0) {
-                const fallbackDomain = fallbackDomains[Math.floor(Math.random() * fallbackDomains.length)];
-                const fallbackProxyUrl = `${fallbackDomain}/redirect?url=${encodedTargetUrl}`;
-                
-                console.log(`🔄 [${requestId}] Trying fallback domain: ${fallbackDomain}`);
-                
-                return res.json({
-                    success: true,
-                    proxyUrl: fallbackProxyUrl,
-                    activeDomain: fallbackDomain,
-                    targetUrl: targetUrl,
-                    spoofedReferer: fakeReferer,
-                    userAgent: fakeUserAgent,
-                    requestId,
-                    timestamp: new Date().toISOString(),
-                    note: 'Using fallback domain'
-                });
-            }
-        }
-        
-        // Log da operação para auditoria
-        logger.info(`Proxy redirect processed for ${requestId}`, {
-            targetUrl,
-            activeDomain,
-            proxyUrl,
-            userAgent: fakeUserAgent,
-            spoofedReferer: fakeReferer,
-            clientIP: req.ip,
-            timestamp: new Date().toISOString()
-        });
-        
-        // Retornar informações do proxy
-        res.json({
-            success: true,
-            proxyUrl,
-            activeDomain,
-            targetUrl,
-            spoofedReferer: fakeReferer,
-            userAgent: fakeUserAgent,
-            requestId,
-            timestamp: new Date().toISOString(),
-            message: 'Redirecionamento via proxy configurado com sucesso'
-        });
-        
-        console.log(`✅ [${requestId}] Proxy redirect response sent successfully`);
-        
-    } catch (error) {
-        console.error(`❌ [${requestId}] Proxy redirect error:`, error);
-        logger.error(`Proxy redirect error for ${requestId}:`, {
-            error: error.message,
-            stack: error.stack,
-            body: req.body
-        });
-        
-        res.status(500).json({
-            success: false,
-            error: 'Erro interno no processamento do proxy',
-            message: error.message,
-            requestId,
-            timestamp: new Date().toISOString()
-        });
-    }
-});
-
-// Endpoint para processar proxy via AJAX (mantido para compatibilidade)
-app.post('/proxy-execute', async (req, res) => {
-    const { encodedUrl } = req.body;
-
-    if (!encodedUrl) {
-        logger.warn('Access to /proxy-execute without encodedUrl parameter.');
-        return res.status(400).send('encodedUrl parameter not found.');
-    }
-
-    let targetUrl;
-    try {
-        targetUrl = Buffer.from(encodedUrl, 'base64').toString('utf8');
-        if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
-            throw new Error('Invalid URL format.');
-        }
-    } catch (e) {
-        logger.warn(`Invalid Base64 or URL in encodedUrl parameter: ${encodedUrl}`);
-        return res.status(400).send('Invalid encodedUrl parameter. Must be a valid Base64 encoded URL.');
-    }
-
-    try {
-        const serverHost = (req.headers['x-forwarded-host'] || req.headers['host']);
-        const target = new URL(targetUrl);
-
-        // Se o destino for o próprio servidor (teste interno)
-        if (target.hostname === serverHost && target.pathname === '/check-referer') {
-            const spoofInfo = logSpoofingInfo(targetUrl);
-            logger.info(`Internal handling for /check-referer with Random Referer: ${spoofInfo.referer}`);
-            const userAgent = spoofInfo.userAgent;
-            const ip = req.ip;
-            const htmlResponse = `
-            <!DOCTYPE html>
-            <html lang="pt-BR">
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Verificador de Referer - Resultado</title>
-                <style>
-                    body { 
-                        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                        color: #333; 
-                        margin: 0;
-                        padding: 20px;
-                        min-height: 100vh;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                    }
-                    .container {
-                        background: white;
-                        padding: 30px;
-                        border-radius: 15px;
-                        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-                        max-width: 600px;
-                        width: 100%;
-                    }
-                    h1 {
-                        color: #4CAF50;
-                        text-align: center;
-                        margin-bottom: 30px;
-                        font-size: 2.2em;
-                    }
-                    .detail {
-                        background: #f8f9fa;
-                        padding: 15px;
-                        margin: 15px 0;
-                        border-radius: 8px;
-                        border-left: 4px solid #4CAF50;
-                    }
-                    .detail strong {
-                        color: #004085; 
-                        display: block;
-                        margin-bottom: 8px;
-                        font-size: 1.1em;
-                    }
-                    .detail p {
-                        margin: 0;
-                        font-family: monospace;
-                        background: rgba(0,0,0,0.05);
-                        padding: 8px;
-                        border-radius: 3px;
-                        font-size: 0.95em;
-                    }
-                    .success {
-                        background-color: #d4edda;
-                        border-left-color: #28a745;
-                    }
-                    .success strong {
-                        color: #155724;
-                    }
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <h1>✅ Teste de Referer Spoofing</h1>
-                    <div class="detail success">
-                        <strong>🎯 Referer Spoofado com Sucesso:</strong>
-                        <p>${spoofInfo.referer}</p>
-                    </div>
-                    <div class="detail">
-                        <strong>🔍 User-Agent:</strong>
-                        <p>${userAgent}</p>
-                    </div>
-                    <div class="detail">
-                        <strong>📍 IP do Cliente:</strong>
-                        <p>${ip}</p>
-                    </div>
-                    <div class="detail">
-                        <strong>⏰ Timestamp:</strong>
-                        <p>${new Date().toISOString()}</p>
-                    </div>
-                </div>
-            </body>
-            </html>
-            `;
-            return res.send(htmlResponse);
-        }
-
-        // Se for uma URL externa, usa proxy transparente com referer spoofing
-        logger.info(`Starting proxy to: ${targetUrl}`);
-        
-        try {
-            // Seleciona domínio ativo e constrói URL do proxy
-            const activeDomain = getRandomActiveDomain();
-            const encodedUrlForProxy = Buffer.from(targetUrl).toString('base64');
-            const proxyUrl = `${activeDomain}/redirect.php?url=${encodedUrlForProxy}`;
-            
-            // Faz requisição proxy através do domínio ativo com referer spoofado
-            const proxyResult = await fetchProxyWithSpoof(proxyUrl, req.headers['user-agent']);
-            
-            logger.info(`✅ Proxy request successful through active domain with referer: ${proxyResult.referer}`);
-            console.log(`🎯 Proxied to: ${proxyUrl} with spoofed referer: ${proxyResult.referer}`);
-            console.log(`🎭 Used user-agent: ${proxyResult.userAgent.substring(0, 50)}...`);
-            
-            // Detectar content-type baseado no conteúdo
-            let contentType = 'text/html; charset=utf-8';
-            const trimmedContent = proxyResult.content.trim();
-            
-            // Detectar JSON
-            if (trimmedContent.startsWith('{') && trimmedContent.endsWith('}')) {
-                contentType = 'application/json';
-            } 
-            // Detectar XML
-            else if (trimmedContent.startsWith('<?xml') || trimmedContent.startsWith('<xml')) {
-                contentType = 'text/xml; charset=utf-8';
-            }
-            // Default para HTML - isso vai renderizar o HTML corretamente
-            else {
-                contentType = 'text/html; charset=utf-8';
-            }
-            
-            // Headers informativos sobre o proxy
-            res.setHeader('Content-Type', contentType);
-            res.setHeader('X-Spoofed-Referer', proxyResult.referer);
-            res.setHeader('X-Proxy-Through', proxyUrl);
-            res.setHeader('X-Original-Target', targetUrl);
-            res.setHeader('X-Proxy-By', 'LinkGate-Redirector');
-            
-            // Retornar o conteúdo obtido através do proxy
-            res.send(proxyResult.content);
-            return;
-            
-        } catch (error) {
-            logger.error(`❌ Proxy request failed: ${error.message}`);
-            console.log(`💥 Proxy error: ${error.message}`);
-            
-            // Página de erro
-            const errorHtml = `
-            <!DOCTYPE html>
-            <html lang="pt-BR">
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Erro no Proxy</title>
-                <style>
-                    body {
-                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                        background: #0f0f0f;
-                        color: #ffffff;
-                        min-height: 100vh;
-                        display: flex;
-                        justify-content: center;
-                        align-items: center;
-                        margin: 0;
-                        text-align: center;
-                    }
-                    .error-container {
-                        max-width: 500px;
-                        padding: 40px;
-                        background: rgba(255, 255, 255, 0.05);
-                        border-radius: 15px;
-                        border: 1px solid rgba(244, 67, 54, 0.3);
-                    }
-                    h1 {
-                        color: #f44336;
-                        margin-bottom: 20px;
-                    }
-                    p {
-                        color: #a0a0a0;
-                        margin-bottom: 20px;
-                    }
-                    .error-detail {
-                        background: rgba(244, 67, 54, 0.1);
-                        padding: 15px;
-                        border-radius: 8px;
-                        margin: 20px 0;
-                        border-left: 4px solid #f44336;
-                    }
-                    code {
-                        background: rgba(0, 0, 0, 0.3);
-                        padding: 2px 6px;
-                        border-radius: 3px;
-                        font-family: monospace;
-                    }
-                </style>
-            </head>
-            <body>
-                <div class="error-container">
-                    <h1>❌ Erro no Proxy</h1>
-                    <p>Ocorreu um erro ao processar a requisição através do proxy.</p>
-                    <div class="error-detail">
-                        <strong>Erro:</strong><br>
-                        <code>${error.message}</code>
-                    </div>
-                    <div class="error-detail">
-                        <strong>URL Alvo:</strong><br>
-                        <code>${targetUrl}</code>
-                    </div>
-                </div>
-            </body>
-            </html>
-            `;
-            
-            res.status(500).send(errorHtml);
-            return;
-        }
-        
-    } catch (error) {
-        logger.error(`❌ Target URL processing error: ${error.message}`);
-        res.status(400).send(`Erro ao processar URL: ${error.message}`);
-        return;
-    }
 });
 
 // Endpoint para testar o novo sistema de proxy
@@ -1621,11 +1185,11 @@ app.get('/test-proxy-system', (req, res) => {
             <p class="subtitle">LinkGate Redirector - Sistema de Redirecionamento via Domínios Ativos</p>
             
             <div class="info-box">
-                <h3>ℹ️ Como Funciona o Novo Sistema</h3>
+                <h3>ℹ️ Como Funciona o Sistema Simplificado</h3>
                 <p><strong>1. Página de Wait:</strong> Usuário vê uma página elegante com countdown de ${CONFIG.WAIT_DELAY_SECONDS} segundos</p>
-                <p><strong>2. Seleção de Domínio:</strong> Sistema escolhe aleatoriamente um domínio ativo da lista</p>
-                <p><strong>3. Referer Spoofing:</strong> Aplica referer falso (Google, Facebook, etc.) automaticamente</p>
-                <p><strong>4. Redirecionamento:</strong> Usuário é redirecionado para o domínio ativo com URL proxy</p>
+                <p><strong>2. Redirecionamento Direto:</strong> Após countdown, JavaScript redireciona diretamente</p>
+                <p><strong>3. Seleção de Domínio:</strong> Sistema escolhe aleatoriamente um domínio ativo no frontend</p>
+                <p><strong>4. Proxy Transparente:</strong> Usuário é enviado para domínio ativo com parâmetro ?url=[base64]</p>
             </div>
             
             <div class="section">
@@ -1676,9 +1240,9 @@ app.get('/test-proxy-system', (req, res) => {
                     <div class="test-card">
                         <h4>🔄 Fluxo do Sistema</h4>
                         <p>1. URL de entrada: /aguarde?a=[base64]</p>
-                        <p>2. Página de wait com countdown</p>
-                        <p>3. AJAX para /proxy-redirect</p>
-                        <p>4. Redirecionamento para domínio ativo</p>
+                        <p>2. Página de wait com countdown de 3s</p>
+                        <p>3. JavaScript seleciona domínio aleatório</p>
+                        <p>4. Redirecionamento direto via window.location</p>
                     </div>
                     
                     <div class="test-card">
