@@ -1021,15 +1021,52 @@ app.get('/redirect', async (req, res) => {
         res.setHeader('X-Proxy-By', 'LinkGate-Redirector');
         res.setHeader('X-Request-ID', requestId);
         
+        // Remover/relaxar Content Security Policy para permitir recursos externos
+        res.setHeader('Content-Security-Policy', 
+            "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; " +
+            "script-src * 'unsafe-inline' 'unsafe-eval'; " +
+            "style-src * 'unsafe-inline'; " +
+            "img-src * data: blob:; " +
+            "font-src * data:; " +
+            "connect-src * 'unsafe-inline'; " +
+            "frame-src * 'unsafe-inline'"
+        );
+        
         // Prevenir cache do browser
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
         res.setHeader('Pragma', 'no-cache');
         res.setHeader('Expires', '0');
         
-        console.log(`📤 [${requestId}] Sending content (${proxyResult.content.length} bytes, ${finalContentType})`);
+        // Processar conteúdo HTML para corrigir URLs e links
+        let processedContent = proxyResult.content;
         
-        // Retornar o conteúdo como HTML válido
-        res.status(200).send(proxyResult.content);
+        // Se for HTML, reescrever URLs relativos para absolutos
+        if (finalContentType.includes('text/html')) {
+            const activeDomainUrl = new URL(activeDomain);
+            const baseUrl = `${activeDomainUrl.protocol}//${activeDomainUrl.host}`;
+            
+            // Corrigir URLs relativos em recursos (CSS, JS, imagens)
+            processedContent = processedContent
+                .replace(/href="\/([^"]*?)"/g, `href="${baseUrl}/$1"`)
+                .replace(/src="\/([^"]*?)"/g, `src="${baseUrl}/$1"`)
+                .replace(/action="\/([^"]*?)"/g, `action="${baseUrl}/$1"`)
+                .replace(/url\(\/([^)]*?)\)/g, `url(${baseUrl}/$1)`);
+            
+            // Adicionar base tag para URLs relativos
+            if (processedContent.includes('<head>')) {
+                processedContent = processedContent.replace(
+                    '<head>', 
+                    `<head>\n<base href="${baseUrl}/">\n`
+                );
+            }
+            
+            console.log(`🔧 [${requestId}] HTML content processed - URLs rewritten to absolute`);
+        }
+        
+        console.log(`📤 [${requestId}] Sending content (${processedContent.length} bytes, ${finalContentType})`);
+        
+        // Retornar o conteúdo processado
+        res.status(200).send(processedContent);
         
     } catch (error) {
         console.error(`❌ [${requestId}] Transparent proxy failed:`, error);
