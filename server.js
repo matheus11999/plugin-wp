@@ -418,21 +418,25 @@ const CONFIG = {
     }
 };
 
-// Lista de referrers para spoofing aleatório (top 5 geradores de tráfego)
+// Lista expandida de referrers para spoofing mais efetivo
 const FAKE_REFERRERS = [
     // Google (maior gerador de tráfego)
     'https://www.google.com/search?q=',
     'https://www.google.com.br/search?q=',
+    'https://www.google.com/',
     'https://images.google.com/',
+    'https://news.google.com/',
     
     // Facebook (segundo maior)
     'https://www.facebook.com/',
     'https://m.facebook.com/',
     'https://www.facebook.com/l.php?u=',
+    'https://l.facebook.com/l.php?u=',
     
     // YouTube (terceiro maior)
     'https://www.youtube.com/',
     'https://m.youtube.com/',
+    'https://www.youtube.com/watch?v=',
     
     // Instagram (quarto maior)
     'https://www.instagram.com/',
@@ -440,10 +444,28 @@ const FAKE_REFERRERS = [
     
     // X/Twitter (quinto maior)
     'https://x.com/',
-    'https://t.co/'
+    'https://twitter.com/',
+    'https://t.co/',
+    
+    // Outras fontes importantes
+    'https://www.reddit.com/',
+    'https://www.reddit.com/r/all',
+    'https://www.linkedin.com/',
+    'https://duckduckgo.com/',
+    'https://www.bing.com/',
+    'https://search.yahoo.com/',
+    'https://www.pinterest.com/',
+    'https://www.tiktok.com/',
+    'https://www.baidu.com/',
+    'https://yandex.com/',
+    'https://www.wikipedia.org/',
+    'https://github.com/',
+    'https://stackoverflow.com/',
+    'https://medium.com/',
+    'https://www.quora.com/'
 ];
 
-// Função para obter um referrer aleatório
+// Função para obter um referrer aleatório com variações realistas
 function getRandomReferrer() {
     const randomIndex = Math.floor(Math.random() * FAKE_REFERRERS.length);
     const baseReferrer = FAKE_REFERRERS[randomIndex];
@@ -451,12 +473,21 @@ function getRandomReferrer() {
     // Se for um referrer de busca, adiciona um termo aleatório
     if (baseReferrer.includes('?q=') && baseReferrer.endsWith('?q=')) {
         const searchTerms = [
-            'technology news', 'best practices', 'tutorial guide', 'how to learn',
-            'latest updates', 'programming tips', 'web development', 'digital marketing',
-            'online tools', 'productivity apps', 'social media trends', 'tech reviews'
+            'url shortener', 'link redirect', 'online tools', 'web utilities',
+            'link generator', 'redirect service', 'url tools', 'web apps',
+            'link manager', 'redirect links', 'short urls', 'link sharing',
+            'technology news', 'best practices', 'tutorial guide', 'how to',
+            'latest updates', 'programming tips', 'web development', 'digital tools'
         ];
         const randomTerm = searchTerms[Math.floor(Math.random() * searchTerms.length)];
         return baseReferrer + encodeURIComponent(randomTerm);
+    }
+    
+    // Para YouTube, adicionar parâmetros realistas
+    if (baseReferrer.includes('youtube.com/watch?v=')) {
+        const videoIds = ['dQw4w9WgXcQ', 'jNQXAC9IVRw', 'ZZ5LpwO-An4', 'fJ9rUzIMcZQ', 'y6120QOlsfU'];
+        const randomId = videoIds[Math.floor(Math.random() * videoIds.length)];
+        return baseReferrer + randomId;
     }
     
     return baseReferrer;
@@ -516,8 +547,23 @@ async function fetchWithCurlSpoof(url) {
     }
 }
 
-// Função para fazer proxy transparente com referer spoofing
-async function fetchProxyWithSpoof(url, userAgent = null) {
+// Função para extrair cookies de resposta HTTP headers
+function extractCookiesFromHeaders(headers) {
+    const cookies = [];
+    const setCookieHeaders = headers.match(/Set-Cookie: ([^\r\n]+)/gi);
+    
+    if (setCookieHeaders) {
+        setCookieHeaders.forEach(header => {
+            const cookieValue = header.replace(/Set-Cookie: /i, '').split(';')[0];
+            cookies.push(cookieValue);
+        });
+    }
+    
+    return cookies.join('; ');
+}
+
+// Função para fazer proxy transparente com referer spoofing e gerenciamento de sessões PHP
+async function fetchProxyWithSpoof(url, userAgent = null, cookies = null, includeHeaders = false) {
     const referer = getRandomReferrer();
     const finalUserAgent = userAgent || getRandomUserAgent();
     
@@ -526,8 +572,35 @@ async function fetchProxyWithSpoof(url, userAgent = null) {
     console.log(`🎭 Using user-agent: ${finalUserAgent.substring(0, 50)}...`);
     
     try {
-        // Faz requisição completa com cURL para obter o conteúdo
-        const curlCommand = `curl -s -L --max-redirs 5 --referer "${referer}" --user-agent "${finalUserAgent}" "${url}"`;
+        // Construir comando cURL com suporte completo para sessões PHP
+        let curlCommand = `curl -s -L --max-redirs 5 --referer "${referer}" --user-agent "${finalUserAgent}"`;
+        
+        // Incluir headers se solicitado (para capturar Set-Cookie)
+        if (includeHeaders) {
+            curlCommand += ` -i`;
+        }
+        
+        // Adicionar cookies se fornecidos (para manter sessões PHP/WordPress)
+        if (cookies) {
+            console.log(`🍪 Using cookies for session: ${cookies.substring(0, 100)}...`);
+            curlCommand += ` --cookie "${cookies}"`;
+        }
+        
+        // Headers para simular navegador real
+        curlCommand += ` -H "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"`;
+        curlCommand += ` -H "Accept-Language: pt-BR,pt;q=0.9,en;q=0.8"`;
+        curlCommand += ` -H "Accept-Encoding: gzip, deflate, br"`;
+        curlCommand += ` -H "Connection: keep-alive"`;
+        curlCommand += ` -H "Upgrade-Insecure-Requests: 1"`;
+        curlCommand += ` -H "Sec-Fetch-Dest: document"`;
+        curlCommand += ` -H "Sec-Fetch-Mode: navigate"`;
+        curlCommand += ` -H "Sec-Fetch-Site: none"`;
+        curlCommand += ` -H "Cache-Control: max-age=0"`;
+        
+        curlCommand += ` "${url}"`;
+        
+        console.log(`🔧 cURL command: ${curlCommand.substring(0, 300)}...`);
+        
         const { stdout, stderr } = await execAsync(curlCommand);
         
         if (stderr) {
@@ -535,9 +608,24 @@ async function fetchProxyWithSpoof(url, userAgent = null) {
         }
         
         console.log(`✅ Proxy request successful with spoofed referer: ${referer}`);
+        console.log(`📏 Response length: ${stdout.length} characters`);
+        
+        let responseHeaders = '';
+        let responseBody = stdout;
+        
+        // Se incluiu headers, separar headers do body
+        if (includeHeaders && stdout.includes('\r\n\r\n')) {
+            const parts = stdout.split('\r\n\r\n');
+            responseHeaders = parts[0];
+            responseBody = parts.slice(1).join('\r\n\r\n');
+            
+            console.log(`📋 Response headers captured: ${responseHeaders.length} chars`);
+        }
+        
         return { 
             success: true, 
-            content: stdout, 
+            content: responseBody,
+            headers: responseHeaders,
             referer, 
             userAgent: finalUserAgent 
         };
@@ -808,8 +896,12 @@ app.get('/redirect', async (req, res) => {
         const fakeReferer = getRandomReferrer();
         const fakeUserAgent = req.headers['user-agent'] || getRandomUserAgent();
         
+        // Capturar cookies do usuário para manter sessões do WordPress
+        const userCookies = req.headers.cookie;
+        
         console.log(`🎲 [${requestId}] Using spoofed referer: ${fakeReferer}`);
         console.log(`🎭 [${requestId}] Using user-agent: ${fakeUserAgent.substring(0, 50)}...`);
+        console.log(`🍪 [${requestId}] User cookies: ${userCookies ? userCookies.substring(0, 100) + '...' : 'None'}`);
         
         // Fazer requisição proxy transparente para o domínio ativo
         logger.info(`Starting transparent proxy for ${requestId}`, {
@@ -818,13 +910,53 @@ app.get('/redirect', async (req, res) => {
             activeDomain,
             clientIP: req.ip,
             spoofedReferer: fakeReferer,
-            userAgent: fakeUserAgent
+            userAgent: fakeUserAgent,
+            hasCookies: !!userCookies
         });
         
-        // Fazer requisição para o domínio ativo com referer spoofing
-        const proxyResult = await fetchProxyWithSpoof(proxyUrl, fakeUserAgent);
+        // Etapa 1: Fazer primeira requisição para estabelecer sessão PHP no domínio ativo
+        console.log(`🔗 [${requestId}] Step 1: Establishing PHP session on active domain`);
+        const sessionResult = await fetchProxyWithSpoof(proxyUrl, fakeUserAgent, null, true);
         
-        console.log(`✅ [${requestId}] Proxy request successful through active domain with referer: ${proxyResult.referer}`);
+        // Extrair cookies de sessão da resposta
+        const sessionCookies = extractCookiesFromHeaders(sessionResult.headers);
+        console.log(`🍪 [${requestId}] Session cookies extracted: ${sessionCookies || 'None'}`);
+        
+        let finalResult = sessionResult;
+        
+        // Verificar se é uma página intermediária que precisa de follow-up
+        if (sessionResult.content.includes('step=2') || 
+            sessionResult.content.includes('aguarde') || 
+            sessionResult.content.includes('setTimeout') ||
+            sessionResult.content.includes('redirect')) {
+            
+            console.log(`🔄 [${requestId}] Step 2: Following session redirect with cookies`);
+            
+            // Aguardar um momento para simular comportamento humano
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // Segunda requisição mantendo a sessão PHP
+            if (sessionCookies) {
+                finalResult = await fetchProxyWithSpoof(proxyUrl, fakeUserAgent, sessionCookies, false);
+                console.log(`✅ [${requestId}] Session-aware request completed`);
+            } else {
+                console.log(`⚠️ [${requestId}] No session cookies found, using original response`);
+            }
+        } else {
+            console.log(`✅ [${requestId}] Direct response received, no session handling needed`);
+        }
+        
+        const proxyResult = finalResult;
+        
+        console.log(`✅ [${requestId}] Proxy request successful through active domain`);
+        console.log(`🎲 [${requestId}] Final spoofed referer used: ${proxyResult.referer}`);
+        console.log(`🔍 [${requestId}] Response contains referer verification: ${proxyResult.content.includes('referer') || proxyResult.content.includes('Referer')}`);
+        
+        // Log para verificar se o referer foi aceito pelo sistema remoto
+        if (proxyResult.content.includes('google.com') || proxyResult.content.includes('facebook.com') || 
+            proxyResult.content.includes('youtube.com') || proxyResult.content.includes('instagram.com')) {
+            console.log(`✅ [${requestId}] Referer spoofing appears successful - response contains expected referrer domains`);
+        }
         
         // Detectar content-type baseado no conteúdo
         let contentType = 'text/html; charset=utf-8';
