@@ -572,8 +572,11 @@ async function fetchProxyWithSpoof(url, userAgent = null, cookies = null, includ
     console.log(`🎭 Using user-agent: ${finalUserAgent.substring(0, 50)}...`);
     
     try {
-        // Construir comando cURL com suporte completo para sessões PHP
+        // Construir comando cURL com suporte completo para sessões PHP e descompressão automática
         let curlCommand = `curl -s -L --max-redirs 5 --referer "${referer}" --user-agent "${finalUserAgent}"`;
+        
+        // IMPORTANTE: Adicionar --compressed para descomprimir gzip/deflate automaticamente
+        curlCommand += ` --compressed`;
         
         // Incluir headers se solicitado (para capturar Set-Cookie)
         if (includeHeaders) {
@@ -921,6 +924,13 @@ app.get('/redirect', async (req, res) => {
         // Extrair cookies de sessão da resposta
         const sessionCookies = extractCookiesFromHeaders(sessionResult.headers);
         console.log(`🍪 [${requestId}] Session cookies extracted: ${sessionCookies || 'None'}`);
+        
+        // Log específico para PHPSESSID
+        if (sessionCookies && sessionCookies.includes('PHPSESSID')) {
+            console.log(`✅ [${requestId}] PHP Session ID found in cookies - session established`);
+        } else {
+            console.log(`⚠️ [${requestId}] No PHP Session ID found - may affect session continuity`);
+        }
         
         let finalResult = sessionResult;
         
