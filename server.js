@@ -399,15 +399,25 @@ app.post('/api/verify', [
 
 // Configurações do sistema
 const CONFIG = {
-    // Domínios ativos para redirecionamento
+    // Domínios ativos para redirecionamento via proxy
     ACTIVE_DOMAINS: [
-        'https://evoapi-wp.ttvjwi.easypanel.host'    ],
+        'https://evoapi-wp.ttvjwi.easypanel.host',
+        'https://example.com',
+        'https://client-website.com'
+    ],
     
-    // Se deve fazer redirecionamento após proxy (true/false)
-    REDIRECT_AFTER_PROXY: false,
+    // Delay da página de wait antes do redirecionamento (em segundos)
+    WAIT_DELAY_SECONDS: 3,
     
-    // Delay antes do redirecionamento (em ms)
-    REDIRECT_DELAY: 3000
+    // Headers customizados para proxy
+    PROXY_HEADERS: {
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'DNT': '1',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1'
+    }
 };
 
 // Lista de referrers para spoofing aleatório (top 5 geradores de tráfego)
@@ -551,8 +561,35 @@ function logSpoofingInfo(url) {
 }
 
 app.get('/aguarde', async (req, res) => {
-    // Página de carregamento primeiro
-    const loadingHtml = `
+    const encodedUrl = req.query.a;
+    
+    if (!encodedUrl) {
+        logger.warn('Access to /aguarde without "a" parameter.');
+        return res.status(400).send(`
+            <!DOCTYPE html>
+            <html lang="pt-BR">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Erro - Parâmetro Obrigatório</title>
+                <style>
+                    body { font-family: Arial, sans-serif; background: #0f0f0f; color: #fff; text-align: center; padding: 50px; }
+                    .error { background: #ff4444; padding: 20px; border-radius: 10px; display: inline-block; }
+                </style>
+            </head>
+            <body>
+                <div class="error">
+                    <h1>❌ Erro</h1>
+                    <p>Parâmetro "a" (URL codificada em Base64) é obrigatório.</p>
+                    <p>Formato: /aguarde?a=[base64_url]</p>
+                </div>
+            </body>
+            </html>
+        `);
+    }
+
+    // Página de wait moderna e elegante
+    const waitPageHtml = `
     <!DOCTYPE html>
     <html lang="pt-BR">
     <head>
@@ -561,7 +598,7 @@ app.get('/aguarde', async (req, res) => {
         <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
         <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
         <meta name="referrer" content="no-referrer">
-        <title>Redirecionando...</title>
+        <title>Aguarde - Redirecionando...</title>
         <style>
             * {
                 margin: 0;
@@ -570,8 +607,8 @@ app.get('/aguarde', async (req, res) => {
             }
             
             body {
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-                background: #0f0f0f;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                 color: #ffffff;
                 min-height: 100vh;
                 display: flex;
@@ -579,24 +616,84 @@ app.get('/aguarde', async (req, res) => {
                 justify-content: center;
                 align-items: center;
                 padding: 20px;
-                margin: 0;
+                overflow: hidden;
+                position: relative;
             }
             
-            .loading-content {
+            /* Animação de fundo */
+            body::before {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.1) 50%, transparent 70%);
+                animation: shimmer 3s infinite;
+                z-index: 0;
+            }
+            
+            @keyframes shimmer {
+                0% { transform: translateX(-100%); }
+                100% { transform: translateX(100%); }
+            }
+            
+            .container {
                 text-align: center;
-                max-width: 400px;
+                max-width: 450px;
                 width: 100%;
+                position: relative;
+                z-index: 1;
+                background: rgba(255, 255, 255, 0.1);
+                backdrop-filter: blur(10px);
+                border-radius: 20px;
+                padding: 40px;
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+                border: 1px solid rgba(255, 255, 255, 0.2);
             }
             
-            .spinner {
-                width: 80px;
-                height: 80px;
-                border: 4px solid rgba(79, 70, 229, 0.2);
-                border-top: 4px solid #4f46e5;
+            .logo {
+                width: 100px;
+                height: 100px;
+                margin: 0 auto 30px;
+                position: relative;
+            }
+            
+            .logo-circle {
+                width: 100%;
+                height: 100%;
+                border: 4px solid rgba(255, 255, 255, 0.3);
                 border-radius: 50%;
-                animation: spin 1.2s linear infinite;
-                margin: 0 auto 40px;
-                filter: drop-shadow(0 0 20px rgba(79, 70, 229, 0.3));
+                position: relative;
+                animation: rotate 2s linear infinite;
+            }
+            
+            .logo-circle::before {
+                content: '';
+                position: absolute;
+                top: -4px;
+                left: -4px;
+                right: -4px;
+                bottom: -4px;
+                border: 4px solid transparent;
+                border-top: 4px solid #ffffff;
+                border-radius: 50%;
+                animation: spin 1s linear infinite;
+            }
+            
+            .logo-inner {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                font-size: 2rem;
+                font-weight: bold;
+                color: #ffffff;
+            }
+            
+            @keyframes rotate {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
             }
             
             @keyframes spin {
@@ -605,62 +702,74 @@ app.get('/aguarde', async (req, res) => {
             }
             
             h1 {
-                font-size: 2.5rem;
+                font-size: 2.2rem;
                 font-weight: 300;
-                color: #ffffff;
-                margin-bottom: 20px;
-                letter-spacing: -0.02em;
-                text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+                margin-bottom: 15px;
+                letter-spacing: -0.5px;
+                text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
             }
             
             .subtitle {
                 font-size: 1.1rem;
-                color: #a0a0a0;
-                margin-bottom: 40px;
-                line-height: 1.6;
-                font-weight: 400;
+                color: rgba(255, 255, 255, 0.8);
+                margin-bottom: 30px;
+                line-height: 1.5;
             }
             
-            .progress-wrapper {
-                width: 100%;
-                margin-bottom: 30px;
+            .progress-container {
+                margin: 30px 0;
             }
             
             .progress-bar {
                 width: 100%;
-                height: 3px;
-                background-color: rgba(79, 70, 229, 0.2);
-                border-radius: 50px;
+                height: 6px;
+                background: rgba(255, 255, 255, 0.2);
+                border-radius: 10px;
                 overflow: hidden;
                 margin-bottom: 20px;
-                box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+                position: relative;
             }
             
-            .progress {
+            .progress-fill {
                 height: 100%;
-                background: linear-gradient(90deg, #4f46e5, #7c3aed, #4f46e5);
+                background: linear-gradient(90deg, #ffffff, #f0f0f0, #ffffff);
                 background-size: 200% 100%;
+                border-radius: 10px;
                 width: 0%;
-                border-radius: 50px;
-                animation: progress 3s ease-out forwards, shimmer 2s linear infinite;
-                box-shadow: 0 0 10px rgba(79, 70, 229, 0.5);
+                animation: fillProgress 3s ease-in-out forwards, progressShimmer 1.5s linear infinite;
+                box-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
             }
             
-            @keyframes progress {
+            @keyframes fillProgress {
                 0% { width: 0%; }
                 100% { width: 100%; }
             }
             
-            @keyframes shimmer {
+            @keyframes progressShimmer {
                 0% { background-position: -200% 0; }
                 100% { background-position: 200% 0; }
             }
             
-            .status-text {
+            .countdown {
+                font-size: 3rem;
+                font-weight: 700;
+                color: #ffffff;
+                text-shadow: 0 0 30px rgba(255, 255, 255, 0.8);
+                margin: 20px 0;
+                animation: pulse 1s ease-in-out infinite;
+            }
+            
+            @keyframes pulse {
+                0%, 100% { transform: scale(1); opacity: 1; }
+                50% { transform: scale(1.1); opacity: 0.8; }
+            }
+            
+            .status {
                 font-size: 1rem;
-                color: #8b7ee8;
+                color: rgba(255, 255, 255, 0.9);
                 font-weight: 500;
-                letter-spacing: 0.5px;
+                letter-spacing: 1px;
+                text-transform: uppercase;
             }
             
             .dots::after {
@@ -675,73 +784,73 @@ app.get('/aguarde', async (req, res) => {
                 80%, 100% { content: '...'; }
             }
             
+            /* Partículas flutuantes */
+            .particle {
+                position: absolute;
+                background: rgba(255, 255, 255, 0.6);
+                border-radius: 50%;
+                pointer-events: none;
+                animation: float 6s infinite ease-in-out;
+            }
+            
+            @keyframes float {
+                0%, 100% { transform: translateY(0px) rotate(0deg); opacity: 0.7; }
+                50% { transform: translateY(-20px) rotate(180deg); opacity: 1; }
+            }
             
             /* Responsividade */
             @media (max-width: 480px) {
-                h1 {
-                    font-size: 2rem;
-                }
-                
-                .subtitle {
-                    font-size: 1rem;
-                }
-                
-                .spinner {
-                    width: 60px;
-                    height: 60px;
-                    margin-bottom: 30px;
-                }
+                .container { padding: 30px 20px; }
+                h1 { font-size: 1.8rem; }
+                .subtitle { font-size: 1rem; }
+                .countdown { font-size: 2.5rem; }
+                .logo { width: 80px; height: 80px; }
+                .logo-inner { font-size: 1.5rem; }
             }
             
-            @media (max-width: 320px) {
-                h1 {
-                    font-size: 1.8rem;
-                }
-                
-                .spinner {
-                    width: 50px;
-                    height: 50px;
-                }
-            }
-            
-            /* Modo landscape mobile */
-            @media (max-height: 500px) and (orientation: landscape) {
-                h1 {
-                    font-size: 1.8rem;
-                    margin-bottom: 15px;
-                }
-                
-                .subtitle {
-                    font-size: 0.95rem;
-                    margin-bottom: 25px;
-                }
-                
-                .spinner {
-                    width: 50px;
-                    height: 50px;
-                    margin-bottom: 25px;
-                }
+            @media (max-height: 600px) {
+                .container { padding: 20px; }
+                .logo { width: 70px; height: 70px; margin-bottom: 20px; }
+                h1 { font-size: 1.6rem; margin-bottom: 10px; }
+                .subtitle { font-size: 0.95rem; margin-bottom: 20px; }
+                .countdown { font-size: 2rem; margin: 15px 0; }
             }
         </style>
     </head>
     <body>
-        <div class="loading-content">
-            <div class="spinner"></div>
-            <h1>Redirecionando</h1>
-            <p class="subtitle">Preparando acesso ao destino</p>
-            
-            <div class="progress-wrapper">
-                <div class="progress-bar">
-                    <div class="progress"></div>
+        <!-- Partículas decorativas -->
+        <div class="particle" style="top: 10%; left: 10%; width: 4px; height: 4px; animation-delay: 0s;"></div>
+        <div class="particle" style="top: 20%; left: 80%; width: 6px; height: 6px; animation-delay: 1s;"></div>
+        <div class="particle" style="top: 60%; left: 20%; width: 3px; height: 3px; animation-delay: 2s;"></div>
+        <div class="particle" style="top: 80%; left: 70%; width: 5px; height: 5px; animation-delay: 3s;"></div>
+        <div class="particle" style="top: 30%; left: 60%; width: 4px; height: 4px; animation-delay: 4s;"></div>
+        
+        <div class="container">
+            <div class="logo">
+                <div class="logo-circle">
+                    <div class="logo-inner">⚡</div>
                 </div>
-                <div class="status-text">
-                    Processando<span class="dots"></span>
+            </div>
+            
+            <h1>Redirecionando</h1>
+            <p class="subtitle">Preparando conexão segura com o destino</p>
+            
+            <div class="progress-container">
+                <div class="progress-bar">
+                    <div class="progress-fill"></div>
+                </div>
+                
+                <div class="countdown" id="countdown">${CONFIG.WAIT_DELAY_SECONDS}</div>
+                <div class="status">
+                    <span id="status">Inicializando</span><span class="dots"></span>
                 </div>
             </div>
         </div>
         
         <script>
-            // Detecta e bloqueia bots
+            console.log('🚀 LinkGate Wait Page - Iniciando redirecionamento via proxy');
+            
+            // Detecta e bloqueia bots conhecidos
             const userAgent = navigator.userAgent.toLowerCase();
             const botPatterns = [
                 'googlebot', 'bingbot', 'slurp', 'duckduckbot', 'baiduspider',
@@ -750,59 +859,306 @@ app.get('/aguarde', async (req, res) => {
                 'outbrain', 'pinterest', 'developers.google.com/+/web/snippet',
                 'slackbot', 'vkshare', 'w3c_validator', 'redditbot', 'applebot',
                 'whatsapp', 'flipboard', 'tumblr', 'bitlybot', 'skypeuripreview',
-                'nuzzel', 'discordbot', 'telegrambot', 'google-structured-data-testing-tool'
+                'nuzzel', 'discordbot', 'telegrambot', 'msnbot', 'archive.org_bot'
             ];
             
             const isBot = botPatterns.some(pattern => userAgent.includes(pattern));
             
             if (isBot) {
-                document.body.innerHTML = '<div style="text-align:center;padding:50px;color:#666;">Acesso restrito</div>';
-                console.log('Bot detectado e bloqueado');
-            } else {
-                // Obter a URL base e parâmetros
-                const currentUrl = new URL(window.location.href);
-                const baseUrl = currentUrl.origin + currentUrl.pathname;
-                const urlParam = currentUrl.searchParams.get('a');
-                
-                // Após 3 segundos, fazer requisição para processar proxy e redirecionar
-                setTimeout(() => {
-                    // Fazer requisição para processar o proxy diretamente
-                    const processUrl = baseUrl + '?a=' + urlParam + '&process=1';
-                    window.location.href = processUrl;
-                }, 3000);
-                
-                // Contador visual
-                let seconds = 3;
-                const statusText = document.querySelector('.status-text');
-                
-                const countdown = setInterval(() => {
-                    seconds--;
-                    if (seconds > 0) {
-                        statusText.innerHTML = \`Processando em \${seconds}s<span class="dots"></span>\`;
-                    } else {
-                        statusText.innerHTML = 'Executando proxy<span class="dots"></span>';
-                        clearInterval(countdown);
-                    }
-                }, 1000);
+                console.log('🤖 Bot detectado e bloqueado:', userAgent);
+                document.body.innerHTML = \`
+                    <div style="
+                        display: flex; 
+                        justify-content: center; 
+                        align-items: center; 
+                        min-height: 100vh; 
+                        background: #0f0f0f; 
+                        color: #666; 
+                        font-family: Arial, sans-serif;
+                        text-align: center;
+                    ">
+                        <div>
+                            <h1>🔒 Acesso Restrito</h1>
+                            <p>Este conteúdo não está disponível para bots automatizados.</p>
+                        </div>
+                    </div>
+                \`;
+                return;
             }
+            
+            // Sistema de countdown e redirecionamento
+            let countdown = ${CONFIG.WAIT_DELAY_SECONDS};
+            const countdownEl = document.getElementById('countdown');
+            const statusEl = document.getElementById('status');
+            const urlParam = new URL(window.location.href).searchParams.get('a');
+            
+            if (!urlParam) {
+                console.error('❌ Parâmetro "a" não encontrado na URL');
+                statusEl.textContent = 'Erro: URL inválida';
+                return;
+            }
+            
+            console.log('⏱️ Iniciando countdown de', countdown, 'segundos');
+            
+            const timer = setInterval(() => {
+                countdown--;
+                countdownEl.textContent = countdown;
+                
+                if (countdown === 2) {
+                    statusEl.textContent = 'Conectando ao proxy';
+                } else if (countdown === 1) {
+                    statusEl.textContent = 'Redirecionando';
+                } else if (countdown === 0) {
+                    clearInterval(timer);
+                    statusEl.textContent = 'Processando';
+                    
+                    console.log('🔄 Iniciando redirecionamento via proxy');
+                    
+                    // Fazer requisição para o endpoint de proxy
+                    fetch('/proxy-redirect', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'User-Agent': navigator.userAgent,
+                            'Accept': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            encodedUrl: urlParam,
+                            userAgent: navigator.userAgent,
+                            referrer: document.referrer || '',
+                            timestamp: new Date().toISOString()
+                        })
+                    })
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(\`HTTP \${response.status}: \${response.statusText}\`);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        console.log('✅ Resposta do proxy recebida:', data);
+                        
+                        if (data.success && data.proxyUrl) {
+                            console.log('🎯 Redirecionando para:', data.proxyUrl);
+                            statusEl.textContent = 'Redirecionando para domínio ativo';
+                            
+                            // Redirecionar para a URL do proxy
+                            setTimeout(() => {
+                                window.location.href = data.proxyUrl;
+                            }, 500);
+                        } else {
+                            throw new Error(data.error || 'Resposta inválida do servidor');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('❌ Erro no redirecionamento:', error);
+                        statusEl.textContent = 'Erro no redirecionamento';
+                        
+                        // Mostrar página de erro
+                        document.body.innerHTML = \`
+                            <div style="
+                                display: flex; 
+                                justify-content: center; 
+                                align-items: center; 
+                                min-height: 100vh; 
+                                background: #0f0f0f; 
+                                color: #fff; 
+                                font-family: Arial, sans-serif;
+                                text-align: center;
+                                padding: 20px;
+                            ">
+                                <div style="
+                                    background: rgba(244, 67, 54, 0.1); 
+                                    padding: 30px; 
+                                    border-radius: 15px; 
+                                    border: 1px solid #f44336;
+                                    max-width: 500px;
+                                ">
+                                    <h1 style="color: #f44336; margin-bottom: 20px;">❌ Erro no Redirecionamento</h1>
+                                    <p style="margin-bottom: 15px;">Não foi possível processar a requisição de redirecionamento.</p>
+                                    <p style="color: #a0a0a0; font-size: 0.9em;">Erro: \${error.message}</p>
+                                    <button onclick="window.history.back()" style="
+                                        background: #4f46e5; 
+                                        color: white; 
+                                        border: none; 
+                                        padding: 10px 20px; 
+                                        border-radius: 5px; 
+                                        cursor: pointer;
+                                        margin-top: 20px;
+                                    ">Voltar</button>
+                                </div>
+                            </div>
+                        \`;
+                    });
+                }
+            }, 1000);
         </script>
     </body>
     </html>
     `;
 
-    // Se não tem o parâmetro process, mostra a página de carregamento e depois processa diretamente
-    if (!req.query.process) {
-        return res.send(loadingHtml);
-    }
+    // Retornar a página de wait
+    logger.info(`📄 Displaying wait page for URL parameter: ${encodedUrl.substring(0, 50)}...`);
+    console.log(`⏱️ Wait page shown, user will be redirected in ${CONFIG.WAIT_DELAY_SECONDS} seconds`);
+    res.send(waitPageHtml);
+});
 
-    // Processa a requisição diretamente (proxy + redirect)
-    const originalUrl = req.originalUrl;
-    const indexOfQuery = originalUrl.indexOf('?a=');
-    const encodedUrl = indexOfQuery !== -1 ? decodeURIComponent(originalUrl.substring(indexOfQuery + 3).split('&')[0]) : null;
+// Novo endpoint para redirecionamento via proxy
+app.post('/proxy-redirect', [
+    body('encodedUrl')
+        .isLength({ min: 1, max: 2000 })
+        .withMessage('encodedUrl deve ter entre 1 e 2000 caracteres')
+        .matches(/^[A-Za-z0-9+/=]+$/)
+        .withMessage('encodedUrl deve ser um Base64 válido'),
+    body('userAgent').optional().isLength({ max: 500 }),
+    body('referrer').optional().isLength({ max: 500 })
+], async (req, res) => {
+    const requestId = req.id;
+    console.log(`🔄 [${requestId}] Proxy redirect request received`);
+    
+    try {
+        // Validar dados de entrada
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            logger.warn(`Validation errors for proxy redirect ${requestId}:`, errors.array());
+            return res.status(400).json({
+                success: false,
+                error: 'Dados de entrada inválidos',
+                details: errors.array(),
+                requestId
+            });
+        }
+        
+        const { encodedUrl, userAgent, referrer, timestamp } = req.body;
+        
+        // Decodificar URL de destino
+        let targetUrl;
+        try {
+            targetUrl = Buffer.from(encodedUrl, 'base64').toString('utf8');
+            
+            // Validar se é uma URL válida
+            const urlObj = new URL(targetUrl);
+            if (!['http:', 'https:'].includes(urlObj.protocol)) {
+                throw new Error('Protocolo não suportado');
+            }
+        } catch (error) {
+            logger.warn(`Invalid URL decoding for request ${requestId}: ${error.message}`);
+            return res.status(400).json({
+                success: false,
+                error: 'URL codificada inválida',
+                requestId
+            });
+        }
+        
+        console.log(`🎯 [${requestId}] Target URL: ${targetUrl}`);
+        console.log(`🔍 [${requestId}] User-Agent: ${userAgent?.substring(0, 50)}...`);
+        console.log(`🔗 [${requestId}] Referrer: ${referrer || 'none'}`);
+        
+        // Selecionar domínio ativo aleatório
+        const activeDomain = getRandomActiveDomain();
+        console.log(`🌐 [${requestId}] Selected active domain: ${activeDomain}`);
+        
+        // Construir URL do proxy
+        const encodedTargetUrl = Buffer.from(targetUrl).toString('base64');
+        const proxyUrl = `${activeDomain}/redirect?url=${encodedTargetUrl}`;
+        
+        console.log(`🎯 [${requestId}] Proxy URL constructed: ${proxyUrl}`);
+        
+        // Gerar referer falso para spoofing
+        const fakeReferer = getRandomReferrer();
+        const fakeUserAgent = userAgent || getRandomUserAgent();
+        
+        console.log(`🎲 [${requestId}] Using fake referer: ${fakeReferer}`);
+        console.log(`🎭 [${requestId}] Using user-agent: ${fakeUserAgent.substring(0, 50)}...`);
+        
+        // Fazer requisição de teste para verificar se o domínio está online
+        try {
+            console.log(`🔍 [${requestId}] Testing domain connectivity...`);
+            const testCommand = `curl -s -I --max-time 10 --referer "${fakeReferer}" --user-agent "${fakeUserAgent}" "${activeDomain}"`;
+            const { stdout: testResult } = await execAsync(testCommand);
+            
+            if (!testResult || !testResult.includes('HTTP/')) {
+                throw new Error('Domain não respondeu corretamente');
+            }
+            
+            console.log(`✅ [${requestId}] Domain is responsive`);
+        } catch (error) {
+            console.log(`⚠️ [${requestId}] Domain test failed: ${error.message}`);
+            logger.warn(`Domain connectivity test failed for ${activeDomain}: ${error.message}`);
+            
+            // Tentar outro domínio se disponível
+            const fallbackDomains = CONFIG.ACTIVE_DOMAINS.filter(d => d !== activeDomain);
+            if (fallbackDomains.length > 0) {
+                const fallbackDomain = fallbackDomains[Math.floor(Math.random() * fallbackDomains.length)];
+                const fallbackProxyUrl = `${fallbackDomain}/redirect?url=${encodedTargetUrl}`;
+                
+                console.log(`🔄 [${requestId}] Trying fallback domain: ${fallbackDomain}`);
+                
+                return res.json({
+                    success: true,
+                    proxyUrl: fallbackProxyUrl,
+                    activeDomain: fallbackDomain,
+                    targetUrl: targetUrl,
+                    spoofedReferer: fakeReferer,
+                    userAgent: fakeUserAgent,
+                    requestId,
+                    timestamp: new Date().toISOString(),
+                    note: 'Using fallback domain'
+                });
+            }
+        }
+        
+        // Log da operação para auditoria
+        logger.info(`Proxy redirect processed for ${requestId}`, {
+            targetUrl,
+            activeDomain,
+            proxyUrl,
+            userAgent: fakeUserAgent,
+            spoofedReferer: fakeReferer,
+            clientIP: req.ip,
+            timestamp: new Date().toISOString()
+        });
+        
+        // Retornar informações do proxy
+        res.json({
+            success: true,
+            proxyUrl,
+            activeDomain,
+            targetUrl,
+            spoofedReferer: fakeReferer,
+            userAgent: fakeUserAgent,
+            requestId,
+            timestamp: new Date().toISOString(),
+            message: 'Redirecionamento via proxy configurado com sucesso'
+        });
+        
+        console.log(`✅ [${requestId}] Proxy redirect response sent successfully`);
+        
+    } catch (error) {
+        console.error(`❌ [${requestId}] Proxy redirect error:`, error);
+        logger.error(`Proxy redirect error for ${requestId}:`, {
+            error: error.message,
+            stack: error.stack,
+            body: req.body
+        });
+        
+        res.status(500).json({
+            success: false,
+            error: 'Erro interno no processamento do proxy',
+            message: error.message,
+            requestId,
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+
+// Endpoint para processar proxy via AJAX (mantido para compatibilidade)
+app.post('/proxy-execute', async (req, res) => {
+    const { encodedUrl } = req.body;
 
     if (!encodedUrl) {
-        logger.warn('Access to /aguarde without "a" parameter.');
-        return res.status(400).send('"a" parameter not found.');
+        logger.warn('Access to /proxy-execute without encodedUrl parameter.');
+        return res.status(400).send('encodedUrl parameter not found.');
     }
 
     let targetUrl;
@@ -812,7 +1168,236 @@ app.get('/aguarde', async (req, res) => {
             throw new Error('Invalid URL format.');
         }
     } catch (e) {
-        logger.warn(`Invalid Base64 or URL in "a" parameter: ${encodedUrl}`);
+        logger.warn(`Invalid Base64 or URL in encodedUrl parameter: ${encodedUrl}`);
+        return res.status(400).send('Invalid encodedUrl parameter. Must be a valid Base64 encoded URL.');
+    }
+
+    try {
+        const serverHost = (req.headers['x-forwarded-host'] || req.headers['host']);
+        const target = new URL(targetUrl);
+
+        // Se o destino for o próprio servidor (teste interno)
+        if (target.hostname === serverHost && target.pathname === '/check-referer') {
+            const spoofInfo = logSpoofingInfo(targetUrl);
+            logger.info(`Internal handling for /check-referer with Random Referer: ${spoofInfo.referer}`);
+            const userAgent = spoofInfo.userAgent;
+            const ip = req.ip;
+            const htmlResponse = `
+            <!DOCTYPE html>
+            <html lang="pt-BR">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Verificador de Referer - Resultado</title>
+                <style>
+                    body { 
+                        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        color: #333; 
+                        margin: 0;
+                        padding: 20px;
+                        min-height: 100vh;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                    }
+                    .container {
+                        background: white;
+                        padding: 30px;
+                        border-radius: 15px;
+                        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+                        max-width: 600px;
+                        width: 100%;
+                    }
+                    h1 {
+                        color: #4CAF50;
+                        text-align: center;
+                        margin-bottom: 30px;
+                        font-size: 2.2em;
+                    }
+                    .detail {
+                        background: #f8f9fa;
+                        padding: 15px;
+                        margin: 15px 0;
+                        border-radius: 8px;
+                        border-left: 4px solid #4CAF50;
+                    }
+                    .detail strong {
+                        color: #004085; 
+                        display: block;
+                        margin-bottom: 8px;
+                        font-size: 1.1em;
+                    }
+                    .detail p {
+                        margin: 0;
+                        font-family: monospace;
+                        background: rgba(0,0,0,0.05);
+                        padding: 8px;
+                        border-radius: 3px;
+                        font-size: 0.95em;
+                    }
+                    .success {
+                        background-color: #d4edda;
+                        border-left-color: #28a745;
+                    }
+                    .success strong {
+                        color: #155724;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1>✅ Teste de Referer Spoofing</h1>
+                    <div class="detail success">
+                        <strong>🎯 Referer Spoofado com Sucesso:</strong>
+                        <p>${spoofInfo.referer}</p>
+                    </div>
+                    <div class="detail">
+                        <strong>🔍 User-Agent:</strong>
+                        <p>${userAgent}</p>
+                    </div>
+                    <div class="detail">
+                        <strong>📍 IP do Cliente:</strong>
+                        <p>${ip}</p>
+                    </div>
+                    <div class="detail">
+                        <strong>⏰ Timestamp:</strong>
+                        <p>${new Date().toISOString()}</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            `;
+            return res.send(htmlResponse);
+        }
+
+        // Se for uma URL externa, usa proxy transparente com referer spoofing
+        logger.info(`Starting proxy to: ${targetUrl}`);
+        
+        try {
+            // Seleciona domínio ativo e constrói URL do proxy
+            const activeDomain = getRandomActiveDomain();
+            const encodedUrlForProxy = Buffer.from(targetUrl).toString('base64');
+            const proxyUrl = `${activeDomain}/redirect.php?url=${encodedUrlForProxy}`;
+            
+            // Faz requisição proxy através do domínio ativo com referer spoofado
+            const proxyResult = await fetchProxyWithSpoof(proxyUrl, req.headers['user-agent']);
+            
+            logger.info(`✅ Proxy request successful through active domain with referer: ${proxyResult.referer}`);
+            console.log(`🎯 Proxied to: ${proxyUrl} with spoofed referer: ${proxyResult.referer}`);
+            console.log(`🎭 Used user-agent: ${proxyResult.userAgent.substring(0, 50)}...`);
+            
+            // Detectar content-type baseado no conteúdo
+            let contentType = 'text/html; charset=utf-8';
+            const trimmedContent = proxyResult.content.trim();
+            
+            // Detectar JSON
+            if (trimmedContent.startsWith('{') && trimmedContent.endsWith('}')) {
+                contentType = 'application/json';
+            } 
+            // Detectar XML
+            else if (trimmedContent.startsWith('<?xml') || trimmedContent.startsWith('<xml')) {
+                contentType = 'text/xml; charset=utf-8';
+            }
+            // Default para HTML - isso vai renderizar o HTML corretamente
+            else {
+                contentType = 'text/html; charset=utf-8';
+            }
+            
+            // Headers informativos sobre o proxy
+            res.setHeader('Content-Type', contentType);
+            res.setHeader('X-Spoofed-Referer', proxyResult.referer);
+            res.setHeader('X-Proxy-Through', proxyUrl);
+            res.setHeader('X-Original-Target', targetUrl);
+            res.setHeader('X-Proxy-By', 'LinkGate-Redirector');
+            
+            // Retornar o conteúdo obtido através do proxy
+            res.send(proxyResult.content);
+            return;
+            
+        } catch (error) {
+            logger.error(`❌ Proxy request failed: ${error.message}`);
+            console.log(`💥 Proxy error: ${error.message}`);
+            
+            // Página de erro
+            const errorHtml = `
+            <!DOCTYPE html>
+            <html lang="pt-BR">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Erro no Proxy</title>
+                <style>
+                    body {
+                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                        background: #0f0f0f;
+                        color: #ffffff;
+                        min-height: 100vh;
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        margin: 0;
+                        text-align: center;
+                    }
+                    .error-container {
+                        max-width: 500px;
+                        padding: 40px;
+                        background: rgba(255, 255, 255, 0.05);
+                        border-radius: 15px;
+                        border: 1px solid rgba(244, 67, 54, 0.3);
+                    }
+                    h1 {
+                        color: #f44336;
+                        margin-bottom: 20px;
+                    }
+                    p {
+                        color: #a0a0a0;
+                        margin-bottom: 20px;
+                    }
+                    .error-detail {
+                        background: rgba(244, 67, 54, 0.1);
+                        padding: 15px;
+                        border-radius: 8px;
+                        margin: 20px 0;
+                        border-left: 4px solid #f44336;
+                    }
+                    code {
+                        background: rgba(0, 0, 0, 0.3);
+                        padding: 2px 6px;
+                        border-radius: 3px;
+                        font-family: monospace;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="error-container">
+                    <h1>❌ Erro no Proxy</h1>
+                    <p>Ocorreu um erro ao processar a requisição através do proxy.</p>
+                    <div class="error-detail">
+                        <strong>Erro:</strong><br>
+                        <code>${error.message}</code>
+                    </div>
+                    <div class="error-detail">
+                        <strong>URL Alvo:</strong><br>
+                        <code>${targetUrl}</code>
+                    </div>
+                </div>
+            </body>
+            </html>
+            `;
+            
+            res.status(500).send(errorHtml);
+            return;
+        }
+        
+    } catch (error) {
+        logger.error(`❌ Target URL processing error: ${error.message}`);
+        res.status(400).send(`Erro ao processar URL: ${error.message}`);
+        return;
+    }
+});
+
+// Endpoint para gerador de URLs
         return res.status(400).send('Invalid "a" parameter. Must be a valid Base64 encoded URL.');
     }
 
@@ -945,10 +1530,19 @@ app.get('/aguarde', async (req, res) => {
                 
                 // Detectar content-type baseado no conteúdo
                 let contentType = 'text/html; charset=utf-8';
-                if (proxyResult.content.includes('application/json') || proxyResult.content.trim().startsWith('{')) {
+                const trimmedContent = proxyResult.content.trim();
+                
+                // Detectar JSON
+                if (trimmedContent.startsWith('{') && trimmedContent.endsWith('}')) {
                     contentType = 'application/json';
-                } else if (proxyResult.content.includes('text/plain')) {
-                    contentType = 'text/plain';
+                } 
+                // Detectar XML
+                else if (trimmedContent.startsWith('<?xml') || trimmedContent.startsWith('<xml')) {
+                    contentType = 'text/xml; charset=utf-8';
+                }
+                // Default para HTML - isso vai renderizar o HTML corretamente
+                else {
+                    contentType = 'text/html; charset=utf-8';
                 }
                 
                 // Headers informativos sobre o proxy
@@ -1301,6 +1895,367 @@ app.get('/check-referer', (req, res) => {
     </html>
     `;
     res.send(htmlResponse);
+});
+
+// Endpoint para testar o novo sistema de proxy
+app.get('/test-proxy-system', (req, res) => {
+    const serverHost = req.headers['x-forwarded-host'] || req.headers.host;
+    const protocol = req.headers['x-forwarded-proto'] || (req.connection.encrypted ? 'https' : 'http');
+    const baseUrl = `${protocol}://${serverHost}`;
+    
+    // URLs de teste
+    const testUrls = [
+        'https://google.com',
+        'https://example.com', 
+        'https://httpbin.org/headers',
+        `${baseUrl}/check-referer`
+    ];
+    
+    const testPageHtml = `
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>🧪 Teste do Sistema de Proxy - LinkGate</title>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                min-height: 100vh;
+                padding: 20px;
+                color: white;
+            }
+            
+            .container {
+                max-width: 1000px;
+                margin: 0 auto;
+                background: rgba(255, 255, 255, 0.1);
+                backdrop-filter: blur(10px);
+                border-radius: 20px;
+                padding: 40px;
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+                border: 1px solid rgba(255, 255, 255, 0.2);
+            }
+            
+            h1 {
+                text-align: center;
+                font-size: 2.5em;
+                margin-bottom: 10px;
+                text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+            }
+            
+            .subtitle {
+                text-align: center;
+                font-size: 1.2em;
+                margin-bottom: 40px;
+                opacity: 0.9;
+            }
+            
+            .section {
+                background: rgba(255, 255, 255, 0.1);
+                border-radius: 15px;
+                padding: 25px;
+                margin-bottom: 25px;
+                border: 1px solid rgba(255, 255, 255, 0.2);
+            }
+            
+            .section h3 {
+                color: #ffffff;
+                margin-bottom: 15px;
+                font-size: 1.4em;
+            }
+            
+            .test-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                gap: 20px;
+                margin-top: 20px;
+            }
+            
+            .test-card {
+                background: rgba(255, 255, 255, 0.1);
+                border-radius: 12px;
+                padding: 20px;
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                transition: transform 0.3s ease, box-shadow 0.3s ease;
+            }
+            
+            .test-card:hover {
+                transform: translateY(-5px);
+                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            }
+            
+            .test-card h4 {
+                color: #ffffff;
+                margin-bottom: 10px;
+                font-size: 1.2em;
+            }
+            
+            .test-card p {
+                color: rgba(255, 255, 255, 0.8);
+                margin-bottom: 15px;
+                line-height: 1.5;
+            }
+            
+            .test-url {
+                background: rgba(0, 0, 0, 0.3);
+                padding: 10px;
+                border-radius: 8px;
+                font-family: monospace;
+                font-size: 0.9em;
+                word-break: break-all;
+                margin: 10px 0;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+            }
+            
+            .btn {
+                background: linear-gradient(135deg, #4f46e5, #7c3aed);
+                color: white;
+                border: none;
+                padding: 12px 24px;
+                border-radius: 8px;
+                cursor: pointer;
+                font-size: 1em;
+                margin: 5px;
+                text-decoration: none;
+                display: inline-block;
+                transition: all 0.3s ease;
+                box-shadow: 0 4px 15px rgba(79, 70, 229, 0.3);
+            }
+            
+            .btn:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 6px 20px rgba(79, 70, 229, 0.4);
+            }
+            
+            .btn-copy {
+                background: linear-gradient(135deg, #10b981, #059669);
+                box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+            }
+            
+            .btn-copy:hover {
+                box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+            }
+            
+            .custom-test {
+                background: rgba(255, 255, 255, 0.1);
+                border-radius: 15px;
+                padding: 25px;
+                margin-top: 30px;
+                border: 1px solid rgba(255, 255, 255, 0.2);
+            }
+            
+            .custom-url {
+                width: 100%;
+                padding: 15px;
+                border: 2px solid rgba(255, 255, 255, 0.2);
+                border-radius: 10px;
+                background: rgba(255, 255, 255, 0.1);
+                color: white;
+                font-size: 1em;
+                margin: 10px 0;
+                backdrop-filter: blur(5px);
+            }
+            
+            .custom-url::placeholder {
+                color: rgba(255, 255, 255, 0.6);
+            }
+            
+            .custom-url:focus {
+                outline: none;
+                border-color: #4f46e5;
+                box-shadow: 0 0 20px rgba(79, 70, 229, 0.3);
+            }
+            
+            .result {
+                display: none;
+                background: rgba(16, 185, 129, 0.2);
+                border: 1px solid #10b981;
+                border-radius: 10px;
+                padding: 20px;
+                margin: 20px 0;
+                color: #ffffff;
+            }
+            
+            .info-box {
+                background: rgba(59, 130, 246, 0.2);
+                border: 1px solid #3b82f6;
+                border-radius: 10px;
+                padding: 20px;
+                margin: 20px 0;
+            }
+            
+            .warning-box {
+                background: rgba(245, 158, 11, 0.2);
+                border: 1px solid #f59e0b;
+                border-radius: 10px;
+                padding: 20px;
+                margin: 20px 0;
+            }
+            
+            @media (max-width: 768px) {
+                .container {
+                    padding: 20px;
+                }
+                
+                h1 {
+                    font-size: 2em;
+                }
+                
+                .test-grid {
+                    grid-template-columns: 1fr;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>🧪 Teste do Sistema de Proxy</h1>
+            <p class="subtitle">LinkGate Redirector - Sistema de Redirecionamento via Domínios Ativos</p>
+            
+            <div class="info-box">
+                <h3>ℹ️ Como Funciona o Novo Sistema</h3>
+                <p><strong>1. Página de Wait:</strong> Usuário vê uma página elegante com countdown de ${CONFIG.WAIT_DELAY_SECONDS} segundos</p>
+                <p><strong>2. Seleção de Domínio:</strong> Sistema escolhe aleatoriamente um domínio ativo da lista</p>
+                <p><strong>3. Referer Spoofing:</strong> Aplica referer falso (Google, Facebook, etc.) automaticamente</p>
+                <p><strong>4. Redirecionamento:</strong> Usuário é redirecionado para o domínio ativo com URL proxy</p>
+            </div>
+            
+            <div class="section">
+                <h3>🎯 URLs de Teste Pré-Configuradas</h3>
+                <div class="test-grid">
+                    ${testUrls.map((url, index) => {
+                        const encodedUrl = Buffer.from(url).toString('base64');
+                        const testUrl = `${baseUrl}/aguarde?a=${encodedUrl}`;
+                        return `
+                        <div class="test-card">
+                            <h4>📍 Teste ${index + 1}</h4>
+                            <p><strong>Destino:</strong> ${url}</p>
+                            <div class="test-url">${testUrl}</div>
+                            <button class="btn btn-copy" onclick="copyToClipboard('${testUrl}')">📋 Copiar URL</button>
+                            <a href="${testUrl}" target="_blank" class="btn">🚀 Testar Agora</a>
+                        </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+            
+            <div class="custom-test">
+                <h3>🔧 Teste Personalizado</h3>
+                <p>Insira qualquer URL para testar o sistema de proxy com referer spoofing:</p>
+                
+                <input type="url" id="customUrl" class="custom-url" placeholder="https://exemplo.com" value="">
+                <button class="btn" onclick="generateCustomTest()">🔗 Gerar URL de Teste</button>
+                
+                <div id="customResult" class="result">
+                    <strong>✅ URL de teste gerada com sucesso!</strong><br>
+                    <div id="customTestUrl" class="test-url"></div>
+                    <button class="btn btn-copy" onclick="copyCustomUrl()">📋 Copiar</button>
+                    <a id="customTestLink" href="#" target="_blank" class="btn">🚀 Testar</a>
+                </div>
+            </div>
+            
+            <div class="warning-box">
+                <h3>⚠️ Configuração Atual</h3>
+                <p><strong>Domínios Ativos:</strong> ${CONFIG.ACTIVE_DOMAINS.join(', ')}</p>
+                <p><strong>Tempo de Wait:</strong> ${CONFIG.WAIT_DELAY_SECONDS} segundos</p>
+                <p><strong>Referers Disponíveis:</strong> ${FAKE_REFERRERS.length} opções (Google, Facebook, YouTube, Instagram, X.com)</p>
+                <p><strong>User-Agents:</strong> ${FAKE_USER_AGENTS.length} opções (Chrome, Firefox, Safari, Mobile)</p>
+            </div>
+            
+            <div class="section">
+                <h3>📊 Informações Técnicas</h3>
+                <div class="test-grid">
+                    <div class="test-card">
+                        <h4>🔄 Fluxo do Sistema</h4>
+                        <p>1. URL de entrada: /aguarde?a=[base64]</p>
+                        <p>2. Página de wait com countdown</p>
+                        <p>3. AJAX para /proxy-redirect</p>
+                        <p>4. Redirecionamento para domínio ativo</p>
+                    </div>
+                    
+                    <div class="test-card">
+                        <h4>🛡️ Recursos de Segurança</h4>
+                        <p>• Detecção e bloqueio de bots</p>
+                        <p>• Validação de URLs Base64</p>
+                        <p>• Rate limiting avançado</p>
+                        <p>• Headers de segurança</p>
+                    </div>
+                    
+                    <div class="test-card">
+                        <h4>📈 Monitoramento</h4>
+                        <p>• Logs detalhados de todas as operações</p>
+                        <p>• Request IDs únicos para rastreamento</p>
+                        <p>• Teste de conectividade de domínios</p>
+                        <p>• Fallback automático para domínios</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <script>
+            let customTestUrl = '';
+            
+            function copyToClipboard(text) {
+                navigator.clipboard.writeText(text).then(() => {
+                    alert('✅ URL copiada para a área de transferência!');
+                }).catch(err => {
+                    console.error('❌ Erro ao copiar:', err);
+                    fallbackCopy(text);
+                });
+            }
+            
+            function fallbackCopy(text) {
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                alert('✅ URL copiada!');
+            }
+            
+            function generateCustomTest() {
+                const customUrl = document.getElementById('customUrl').value;
+                if (!customUrl) {
+                    alert('⚠️ Por favor, insira uma URL válida!');
+                    return;
+                }
+                
+                try {
+                    new URL(customUrl); // Valida se é uma URL válida
+                    const encodedUrl = btoa(customUrl);
+                    customTestUrl = '${baseUrl}/aguarde?a=' + encodedUrl;
+                    
+                    document.getElementById('customTestUrl').textContent = customTestUrl;
+                    document.getElementById('customTestLink').href = customTestUrl;
+                    document.getElementById('customResult').style.display = 'block';
+                } catch (e) {
+                    alert('❌ URL inválida! Por favor, insira uma URL completa (ex: https://exemplo.com)');
+                }
+            }
+            
+            function copyCustomUrl() {
+                copyToClipboard(customTestUrl);
+            }
+            
+            // Auto-focus no campo de URL personalizada
+            document.addEventListener('DOMContentLoaded', function() {
+                document.getElementById('customUrl').focus();
+            });
+        </script>
+    </body>
+    </html>
+    `;
+    
+    res.send(testPageHtml);
 });
 
 // Endpoint para gerar URL de teste para o referer spoofing
