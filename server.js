@@ -931,39 +931,123 @@ app.get('/redirect', async (req, res) => {
             hasCookies: !!userCookies
         });
         
-        // Etapa 1: Capturar headers/cookies com requisição HEAD/GET para estabelecer sessão
-        console.log(`🔗 [${requestId}] Step 1: Establishing PHP session and capturing cookies`);
-        const headerResult = await fetchProxyWithSpoof(proxyUrl, fakeUserAgent, null, true);
+        // Nova estratégia: Proxy para página inicial + Meta refresh redirect
+        console.log(`🏠 [${requestId}] Step 1: Fetching homepage of active domain to establish session`);
         
-        // Extrair cookies de sessão da resposta
-        const sessionCookies = extractCookiesFromHeaders(headerResult.headers);
-        console.log(`🍪 [${requestId}] Session cookies extracted: ${sessionCookies || 'None'}`);
+        // Fazer proxy para a página inicial do domínio ativo para estabelecer sessão
+        const homepageUrl = activeDomain; // URL da página inicial
+        const homepageResult = await fetchProxyWithSpoof(homepageUrl, fakeUserAgent, null, false);
         
-        // Log específico para PHPSESSID
-        if (sessionCookies && sessionCookies.includes('PHPSESSID')) {
-            console.log(`✅ [${requestId}] PHP Session ID found in cookies - session established`);
-        } else {
-            console.log(`⚠️ [${requestId}] No PHP Session ID found - may affect session continuity`);
+        console.log(`✅ [${requestId}] Homepage content fetched from ${activeDomain}`);
+        console.log(`📄 [${requestId}] Homepage content length: ${homepageResult.content.length} characters`);
+        
+        // Construir URL final de redirecionamento
+        const finalRedirectUrl = `${activeDomain}/redirect.php?url=${encodedUrl}`;
+        
+        console.log(`🔄 [${requestId}] Will redirect to: ${finalRedirectUrl}`);
+        
+        // Criar página com conteúdo do homepage + meta refresh para redirect
+        const redirectPageContent = `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="no-referrer">
+    <meta http-equiv="refresh" content="2; url=${finalRedirectUrl}">
+    <title>Redirecionando...</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #000;
+            color: #fff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            text-align: center;
         }
-        
-        // Etapa 2: Fazer requisição com cookies para obter conteúdo descomprimido
-        console.log(`🔄 [${requestId}] Step 2: Fetching decompressed content with session cookies`);
-        
-        // Aguardar um momento para simular comportamento humano
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        // Requisição final com cookies de sessão e descompressão adequada
-        let finalResult;
-        if (sessionCookies) {
-            finalResult = await fetchProxyWithSpoof(proxyUrl, fakeUserAgent, sessionCookies, false);
-            console.log(`✅ [${requestId}] Session-aware request with decompression completed`);
-        } else {
-            // Se não tem cookies, fazer requisição simples descomprimida
-            finalResult = await fetchProxyWithSpoof(proxyUrl, fakeUserAgent, null, false);
-            console.log(`⚠️ [${requestId}] No session cookies, using simple decompressed request`);
+        .redirect-info {
+            background: #111;
+            padding: 30px;
+            border-radius: 10px;
+            border: 1px solid #333;
+            max-width: 500px;
         }
+        .countdown {
+            font-size: 2rem;
+            color: #4CAF50;
+            margin: 20px 0;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: #333;
+            border-radius: 2px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+        .progress-fill {
+            height: 100%;
+            background: #4CAF50;
+            width: 0%;
+            animation: fillProgress 2s linear forwards;
+        }
+        @keyframes fillProgress {
+            0% { width: 0%; }
+            100% { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <div class="redirect-info">
+        <h2>🔗 Estabelecendo Sessão</h2>
+        <p>Conectando ao domínio ativo...</p>
+        <div class="progress-bar">
+            <div class="progress-fill"></div>
+        </div>
+        <div class="countdown" id="countdown">2</div>
+        <p><small>Redirecionando automaticamente...</small></p>
+    </div>
+    
+    <!-- Conteúdo original da homepage (oculto) para estabelecer sessão -->
+    <div style="display: none;">
+        ${homepageResult.content.substring(0, 1000)}...
+    </div>
+    
+    <script>
+        console.log('🔗 Session establishment page loaded');
+        console.log('🎯 Will redirect to: ${finalRedirectUrl}');
         
-        const proxyResult = finalResult;
+        // Countdown visual
+        let count = 2;
+        const countdownEl = document.getElementById('countdown');
+        const timer = setInterval(() => {
+            count--;
+            countdownEl.textContent = count;
+            if (count <= 0) {
+                clearInterval(timer);
+                countdownEl.textContent = '0';
+                console.log('🚀 Redirecting now...');
+                window.location.href = '${finalRedirectUrl}';
+            }
+        }, 1000);
+        
+        // Fallback redirect after 3 seconds
+        setTimeout(() => {
+            console.log('🔄 Fallback redirect executing...');
+            window.location.href = '${finalRedirectUrl}';
+        }, 3000);
+    </script>
+</body>
+</html>`;
+        
+        const proxyResult = {
+            content: redirectPageContent,
+            referer: homepageResult.referer,
+            userAgent: homepageResult.userAgent
+        };
         
         console.log(`✅ [${requestId}] Proxy request successful through active domain`);
         console.log(`🎲 [${requestId}] Final spoofed referer used: ${proxyResult.referer}`);
@@ -1021,52 +1105,16 @@ app.get('/redirect', async (req, res) => {
         res.setHeader('X-Proxy-By', 'LinkGate-Redirector');
         res.setHeader('X-Request-ID', requestId);
         
-        // Remover/relaxar Content Security Policy para permitir recursos externos
-        res.setHeader('Content-Security-Policy', 
-            "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; " +
-            "script-src * 'unsafe-inline' 'unsafe-eval'; " +
-            "style-src * 'unsafe-inline'; " +
-            "img-src * data: blob:; " +
-            "font-src * data:; " +
-            "connect-src * 'unsafe-inline'; " +
-            "frame-src * 'unsafe-inline'"
-        );
-        
-        // Prevenir cache do browser
+        // Headers simples para a página de redirecionamento
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
         res.setHeader('Pragma', 'no-cache');
         res.setHeader('Expires', '0');
         
-        // Processar conteúdo HTML para corrigir URLs e links
-        let processedContent = proxyResult.content;
+        console.log(`📤 [${requestId}] Sending redirect page (${proxyResult.content.length} bytes)`);
+        console.log(`🎯 [${requestId}] Meta refresh will redirect to: ${activeDomain}/redirect.php?url=${encodedUrl}`);
         
-        // Se for HTML, reescrever URLs relativos para absolutos
-        if (finalContentType.includes('text/html')) {
-            const activeDomainUrl = new URL(activeDomain);
-            const baseUrl = `${activeDomainUrl.protocol}//${activeDomainUrl.host}`;
-            
-            // Corrigir URLs relativos em recursos (CSS, JS, imagens)
-            processedContent = processedContent
-                .replace(/href="\/([^"]*?)"/g, `href="${baseUrl}/$1"`)
-                .replace(/src="\/([^"]*?)"/g, `src="${baseUrl}/$1"`)
-                .replace(/action="\/([^"]*?)"/g, `action="${baseUrl}/$1"`)
-                .replace(/url\(\/([^)]*?)\)/g, `url(${baseUrl}/$1)`);
-            
-            // Adicionar base tag para URLs relativos
-            if (processedContent.includes('<head>')) {
-                processedContent = processedContent.replace(
-                    '<head>', 
-                    `<head>\n<base href="${baseUrl}/">\n`
-                );
-            }
-            
-            console.log(`🔧 [${requestId}] HTML content processed - URLs rewritten to absolute`);
-        }
-        
-        console.log(`📤 [${requestId}] Sending content (${processedContent.length} bytes, ${finalContentType})`);
-        
-        // Retornar o conteúdo processado
-        res.status(200).send(processedContent);
+        // Retornar a página de redirecionamento
+        res.status(200).send(proxyResult.content);
         
     } catch (error) {
         console.error(`❌ [${requestId}] Transparent proxy failed:`, error);
