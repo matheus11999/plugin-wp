@@ -946,6 +946,9 @@ app.get('/redirect', async (req, res) => {
         // Construir URL final de redirecionamento
         const finalRedirectUrl = `${activeDomain}/redirect.php?url=${encodedUrl}`;
         
+        // Escapar URL para uso seguro em JavaScript
+        const escapedRedirectUrl = finalRedirectUrl.replace(/'/g, "\\'").replace(/"/g, '\\"');
+        
         console.log(`🔄 [${requestId}] Will redirect to: ${finalRedirectUrl}`);
         
         // Criar página com conteúdo do homepage + meta refresh para redirect
@@ -1020,26 +1023,29 @@ app.get('/redirect', async (req, res) => {
     
     <script>
         console.log('🔗 Session establishment page loaded');
-        console.log('🎯 Will redirect to: ${finalRedirectUrl}');
+        console.log('🎯 Will redirect to: ' + '${escapedRedirectUrl}');
+        
+        // URL de redirecionamento final
+        var redirectUrl = '${escapedRedirectUrl}';
         
         // Countdown visual
-        let count = 2;
-        const countdownEl = document.getElementById('countdown');
-        const timer = setInterval(() => {
+        var count = 2;
+        var countdownEl = document.getElementById('countdown');
+        var timer = setInterval(function() {
             count--;
             countdownEl.textContent = count;
             if (count <= 0) {
                 clearInterval(timer);
                 countdownEl.textContent = '0';
                 console.log('🚀 Redirecting now...');
-                window.location.href = '${finalRedirectUrl}';
+                window.location.href = redirectUrl;
             }
         }, 1000);
         
         // Fallback redirect after 3 seconds
-        setTimeout(() => {
+        setTimeout(function() {
             console.log('🔄 Fallback redirect executing...');
-            window.location.href = '${finalRedirectUrl}';
+            window.location.href = redirectUrl;
         }, 3000);
     </script>
 </body>
